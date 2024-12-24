@@ -1,20 +1,20 @@
 use bevy::{
     asset::load_internal_asset,
-    core_pipeline::core_3d::MainPass3dNode,
+    core_pipeline::{
+        core_3d::MainPass3dNode, tonemapping::TonemappingNode, upscaling::UpscalingNode,
+    },
     prelude::*,
     reflect::TypeUuid,
     render::{
-        render_graph::{RenderGraph, SlotInfo, SlotType},
+        render_graph::{EmptyNode, RenderGraph, SlotInfo, SlotType},
         RenderApp,
     },
 };
-use light::LightPlugin;
+use light::{LightPassNode, LightPlugin};
 use mesh::MeshPlugin;
 use prepass::{PrepassNode, PrepassPlugin};
 use transform::TransformPlugin;
 use view::ViewPlugin;
-
-use crate::light::LightPassNode;
 
 pub mod light;
 pub mod mesh;
@@ -87,47 +87,102 @@ impl Plugin for HikariPlugin {
             .add_plugin(LightPlugin);
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+            // shine node
             let prepass_node = PrepassNode::new(&mut render_app.world);
             let light_pass_node = LightPassNode::new(&mut render_app.world);
+
+            // core3d
+            // let prepass_node = PrepassNode::new(&mut render_app.world);
             let pass_node_3d = MainPass3dNode::new(&mut render_app.world);
+            let tonemapping = TonemappingNode::new(&mut render_app.world);
+            let upscaling = UpscalingNode::new(&mut render_app.world);
 
             let mut graph = render_app.world.resource_mut::<RenderGraph>();
 
-            let mut hikari_graph = RenderGraph::default();
-            hikari_graph.add_node(graph::node::PREPASS, prepass_node);
-            hikari_graph.add_node(graph::node::LIGHT_DIRECT_PASS, light_pass_node);
-            hikari_graph.add_node(
+            let mut shine_graph = RenderGraph::default();
+
+            shine_graph.add_node(
+                bevy::core_pipeline::core_3d::graph::node::PREPASS,
+                prepass_node,
+            );
+
+            shine_graph.add_node(
                 bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
                 pass_node_3d,
             );
-            let input_node_id = hikari_graph.set_input(vec![SlotInfo::new(
+            shine_graph.add_node(
+                bevy::core_pipeline::core_3d::graph::node::TONEMAPPING,
+                tonemapping,
+            );
+            shine_graph.add_node(
+                bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS_POST_PROCESSING,
+                EmptyNode,
+            );
+            shine_graph.add_node(
+                bevy::core_pipeline::core_3d::graph::node::UPSCALING,
+                upscaling,
+            );
+
+            shine_graph.add_node(graph::node::LIGHT_DIRECT_PASS, light_pass_node);
+
+            let input_node_id = shine_graph.set_input(vec![SlotInfo::new(
                 graph::input::VIEW_ENTITY,
                 SlotType::Entity,
             )]);
-            hikari_graph.add_slot_edge(
+
+            shine_graph.add_slot_edge(
                 input_node_id,
                 graph::input::VIEW_ENTITY,
                 graph::node::PREPASS,
                 PrepassNode::IN_VIEW,
             );
-            hikari_graph.add_slot_edge(
+            shine_graph.add_slot_edge(
                 input_node_id,
                 graph::input::VIEW_ENTITY,
                 graph::node::LIGHT_DIRECT_PASS,
                 LightPassNode::IN_VIEW,
             );
-            hikari_graph.add_node_edge(graph::node::PREPASS, graph::node::LIGHT_DIRECT_PASS);
-            hikari_graph.add_slot_edge(
+            shine_graph.add_slot_edge(
                 input_node_id,
                 graph::input::VIEW_ENTITY,
                 bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
                 MainPass3dNode::IN_VIEW,
             );
-            hikari_graph.add_node_edge(
+            shine_graph.add_slot_edge(
+                input_node_id,
+                graph::input::VIEW_ENTITY,
+                bevy::core_pipeline::core_3d::graph::node::TONEMAPPING,
+                TonemappingNode::IN_VIEW,
+            );
+            shine_graph.add_slot_edge(
+                input_node_id,
+                graph::input::VIEW_ENTITY,
+                bevy::core_pipeline::core_3d::graph::node::UPSCALING,
+                UpscalingNode::IN_VIEW,
+            );
+            shine_graph.add_node_edge(
+                graph::node::PREPASS,
+                bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
+            );
+            shine_graph.add_node_edge(graph::node::PREPASS, graph::node::LIGHT_DIRECT_PASS);
+            shine_graph.add_node_edge(
                 graph::node::LIGHT_DIRECT_PASS,
                 bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
             );
-            graph.add_sub_graph(graph::NAME, hikari_graph);
+            shine_graph.add_node_edge(
+                bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
+                bevy::core_pipeline::core_3d::graph::node::TONEMAPPING,
+            );
+            shine_graph.add_node_edge(
+                bevy::core_pipeline::core_3d::graph::node::TONEMAPPING,
+                bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS_POST_PROCESSING,
+            );
+            shine_graph.add_node_edge(
+                bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS_POST_PROCESSING,
+                bevy::core_pipeline::core_3d::graph::node::UPSCALING,
+            );
+
+            graph.add_sub_graph(graph::NAME, shine_graph);
         }
     }
 }

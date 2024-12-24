@@ -7,9 +7,9 @@ use crate::{
 };
 use bevy::{
     pbr::{
-        GlobalLightMeta, GpuLights, GpuPointLights, LightMeta, ShadowSamplers, ViewClusterBindings,
-        ViewLightsUniformOffset, ViewShadowBindings, CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT,
-        MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS,
+        GlobalLightMeta, GpuLights, GpuPointLights, LightMeta, MeshPipelineKey, ShadowSamplers,
+        ViewClusterBindings, ViewLightsUniformOffset, ViewShadowBindings,
+        CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS,
     },
     prelude::*,
     render::{
@@ -32,7 +32,6 @@ impl Plugin for LightPlugin {
             render_app
                 .init_resource::<LightPipeline>()
                 .init_resource::<SpecializedComputePipelines<LightPipeline>>()
-                .init_resource::<CachedLightPipelines>()
                 .add_system(prepare_light_pass_targets.in_set(RenderSet::Prepare))
                 .add_system(queue_light_pipelines.in_set(RenderSet::Queue))
                 .add_system(queue_view_bind_groups.in_set(RenderSet::Queue))
@@ -370,9 +369,9 @@ fn prepare_light_pass_targets(
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct CachedLightPipelines {
-    direct: Option<CachedComputePipelineId>,
+    direct: CachedComputePipelineId,
 }
 
 fn queue_light_pipelines(
@@ -381,15 +380,24 @@ fn queue_light_pipelines(
     mut pipelines: ResMut<SpecializedComputePipelines<LightPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
 ) {
+    for pipeline in pipeline_cache.pipelines() {
+        info!(
+            "before cache pipeline,  queue pipeline_cahce: {:?}",
+            pipeline.state
+        );
+    }
+
     let direct = pipelines.specialize(&mut pipeline_cache, &pipeline, ());
+
+    for pipeline in pipeline_cache.pipelines() {
+        info!("queue pipeline_cahce: {:?}", pipeline.state);
+    }
 
     info!(
         "insert CachedLightPipelines now, direct cached computed pipeline id: {:?}",
         direct
     );
-    commands.insert_resource(CachedLightPipelines {
-        direct: Some(direct),
-    })
+    commands.insert_resource(CachedLightPipelines { direct })
 }
 
 #[derive(Component)]
@@ -650,7 +658,7 @@ impl Node for LightPassNode {
             debug!("there are some pipelines: {:?}", pipeline.state);
         }
 
-        if let Some(direct_pipeline) = pipeline_cache.get_compute_pipeline(pipelines.direct.unwrap()) {
+        if let Some(direct_pipeline) = pipeline_cache.get_compute_pipeline(pipelines.direct) {
             info!("direct_pipeline is {:?}", direct_pipeline);
             pass.set_pipeline(direct_pipeline);
 
