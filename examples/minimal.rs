@@ -4,7 +4,9 @@ use std::f32::consts::PI;
 
 fn main() {
     App::new()
+        // .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
+        // .add_plugin(PbrPlugin)
         .add_plugin(HikariPlugin)
         .add_startup_system(setup)
         .add_system(rotate_camera)
@@ -19,24 +21,24 @@ fn setup(
     // Ground
     commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Cube::default())),
-        material: materials.add(Color::rgb(0.05, 0.0, 0.0).into()),
+        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
         transform: Transform {
             translation: Vec3::new(0.0, -0.5, 0.0),
             rotation: Default::default(),
-            scale: Vec3::new(10.0, 0.1, 10.0),
+            scale: Vec3::new(5.0, 1.0, 5.0),
         },
         ..Default::default()
     });
     // Sphere
-    // commands.spawn(PbrBundle {
-    //     mesh: meshes.add(Mesh::from(shape::UVSphere {
-    //         radius: 0.5,
-    //         ..Default::default()
-    //     })),
-    //     material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
-    //     transform: Transform::from_xyz(0.0, 0.5, 0.0),
-    //     ..Default::default()
-    // });
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::UVSphere {
+            radius: 0.5,
+            ..Default::default()
+        })),
+        material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+        ..Default::default()
+    });
 
     // Only directional light is supported
     const HALF_SIZE: f32 = 5.0;
