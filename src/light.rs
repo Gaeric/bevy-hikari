@@ -364,6 +364,7 @@ fn queue_light_pipelines(
     mut pipeline_cache: ResMut<PipelineCache>,
 ) {
     let direct = pipelines.specialize(&mut pipeline_cache, &pipeline, ());
+    info!("in queue, direct_pipeline is {:?}", direct);
     commands.insert_resource(CachedLightPipelines { direct })
 }
 
@@ -620,6 +621,10 @@ impl Node for LightPassNode {
         let direct_pipeline = pipeline_cache
             .get_compute_pipeline(pipelines.direct)
             .unwrap();
+
+        info!("pipelines is {:?}", pipelines.direct);
+        info!("in node run, direct_pipeline is {:?}", direct_pipeline);
+
         pass.set_pipeline(direct_pipeline);
 
         let size = camera.physical_target_size.unwrap();

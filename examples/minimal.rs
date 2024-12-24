@@ -21,11 +21,11 @@ fn setup(
     // Ground
     commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Cube::default())),
-        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+        material: materials.add(Color::rgb(0.0, 0.0, 0.0).into()),
         transform: Transform {
             translation: Vec3::new(0.0, -0.5, 0.0),
             rotation: Default::default(),
-            scale: Vec3::new(5.0, 1.0, 5.0),
+            scale: Vec3::new(10.0, 0.1, 10.0),
         },
         ..Default::default()
     });
