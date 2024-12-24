@@ -8,7 +8,7 @@ use bevy::{
         primitives::Aabb,
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        Extract, RenderApp, RenderStage,
+        Extract, RenderApp, RenderSet,
     },
     utils::{HashMap, HashSet},
 };
@@ -34,24 +34,37 @@ impl Plugin for MeshPlugin {
                 .init_resource::<MeshRenderAssets>()
                 .init_resource::<MeshAssetState>()
                 .init_resource::<MeshInstanceState>()
-                .add_system_to_stage(RenderStage::Extract, extract_mesh_assets)
-                .add_system_to_stage(RenderStage::Extract, extract_mesh_instances)
-                .add_system_to_stage(RenderStage::Extract, extract_meshes)
-                .add_system_to_stage(
-                    RenderStage::Prepare,
-                    prepare_mesh_assets.label(MeshSystems::PrepareMeshAssets),
+                .add_system(
+                    extract_mesh_assets
+                        .in_set(RenderSet::ExtractCommands)
+                        .in_schedule(ExtractSchedule),
                 )
-                .add_system_to_stage(
-                    RenderStage::Prepare,
+                .add_system(
+                    extract_mesh_instances
+                        .in_set(RenderSet::ExtractCommands)
+                        .in_schedule(ExtractSchedule),
+                )
+                .add_system(
+                    extract_meshes
+                        .in_set(RenderSet::ExtractCommands)
+                        .in_schedule(ExtractSchedule),
+                )
+                .add_system(
+                    prepare_mesh_assets
+                        .in_set(RenderSet::Prepare)
+                        .in_set(MeshSystems::PrepareMeshAssets),
+                )
+                .add_system(
                     prepare_mesh_instances
-                        .label(MeshSystems::PrepareMeshInstances)
+                        .in_set(RenderSet::Prepare)
+                        .in_set(MeshSystems::PrepareMeshInstances)
                         .after(MeshSystems::PrepareMeshAssets),
                 );
         }
     }
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub enum MeshSystems {
     PrepareMeshAssets,
     PrepareMeshInstances,
@@ -158,7 +171,7 @@ pub struct GpuInstanceBuffer {
 }
 
 /// Acceleration structures on GPU.
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct MeshRenderAssets {
     pub vertex_buffer: StorageBuffer<GpuVertexBuffer>,
     pub primitive_buffer: StorageBuffer<GpuPrimitiveBuffer>,
@@ -308,7 +321,7 @@ pub struct GpuMeshSlice {
     pub node_len: u32,
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Resource)]
 pub enum MeshAssetState {
     /// No updates for all mesh assets.
     #[default]
@@ -319,7 +332,7 @@ pub enum MeshAssetState {
     Updated,
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Resource)]
 pub enum MeshInstanceState {
     #[default]
     Clean,
@@ -327,13 +340,13 @@ pub enum MeshInstanceState {
 }
 
 /// Holds all GPU representatives of mesh assets.
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct GpuMeshes {
     pub assets: BTreeMap<Handle<Mesh>, GpuMesh>,
     pub slices: HashMap<Handle<Mesh>, GpuMeshSlice>,
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct ExtractedMeshes {
     extracted: Vec<(Handle<Mesh>, Mesh)>,
     removed: Vec<Handle<Mesh>>,
@@ -464,7 +477,7 @@ fn extract_meshes(
     }
 }
 
-#[derive(Default, Deref, DerefMut)]
+#[derive(Default, Deref, DerefMut, Resource)]
 pub struct GpuMeshInstances(BTreeMap<Entity, (Handle<Mesh>, GpuInstance)>);
 
 pub enum MeshInstanceEvent {
@@ -476,7 +489,7 @@ pub enum MeshInstanceEvent {
 #[allow(clippy::type_complexity)]
 fn mesh_instance_system(
     mut events: EventWriter<MeshInstanceEvent>,
-    removed: RemovedComponents<Handle<Mesh>>,
+    mut removed: RemovedComponents<Handle<Mesh>>,
     mut set: ParamSet<(
         Query<(Entity, &Handle<Mesh>), Added<Handle<Mesh>>>,
         Query<(Entity, &Handle<Mesh>), Changed<Transform>>,

@@ -104,39 +104,29 @@ impl Plugin for HikariPlugin {
                 graph::input::VIEW_ENTITY,
                 SlotType::Entity,
             )]);
-            hikari_graph
-                .add_slot_edge(
-                    input_node_id,
-                    graph::input::VIEW_ENTITY,
-                    graph::node::PREPASS,
-                    PrepassNode::IN_VIEW,
-                )
-                .unwrap();
-            hikari_graph
-                .add_slot_edge(
-                    input_node_id,
-                    graph::input::VIEW_ENTITY,
-                    graph::node::LIGHT_DIRECT_PASS,
-                    LightPassNode::IN_VIEW,
-                )
-                .unwrap();
-            hikari_graph
-                .add_node_edge(graph::node::PREPASS, graph::node::LIGHT_DIRECT_PASS)
-                .unwrap();
-            hikari_graph
-                .add_slot_edge(
-                    input_node_id,
-                    graph::input::VIEW_ENTITY,
-                    bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
-                    MainPass3dNode::IN_VIEW,
-                )
-                .unwrap();
-            hikari_graph
-                .add_node_edge(
-                    graph::node::LIGHT_DIRECT_PASS,
-                    bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
-                )
-                .unwrap();
+            hikari_graph.add_slot_edge(
+                input_node_id,
+                graph::input::VIEW_ENTITY,
+                graph::node::PREPASS,
+                PrepassNode::IN_VIEW,
+            );
+            hikari_graph.add_slot_edge(
+                input_node_id,
+                graph::input::VIEW_ENTITY,
+                graph::node::LIGHT_DIRECT_PASS,
+                LightPassNode::IN_VIEW,
+            );
+            hikari_graph.add_node_edge(graph::node::PREPASS, graph::node::LIGHT_DIRECT_PASS);
+            hikari_graph.add_slot_edge(
+                input_node_id,
+                graph::input::VIEW_ENTITY,
+                bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
+                MainPass3dNode::IN_VIEW,
+            );
+            hikari_graph.add_node_edge(
+                graph::node::LIGHT_DIRECT_PASS,
+                bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
+            );
             graph.add_sub_graph(graph::NAME, hikari_graph);
         }
     }

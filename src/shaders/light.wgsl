@@ -73,9 +73,9 @@ var normal_velocity_sampler: sampler;
 @group(3) @binding(0)
 var render_texture: texture_storage_2d<rgba16float, write>;
 
-let FLOAT_EPSILON: f32 = 1.0e-5;
-let MAX_FLOAT: f32 = 3.402823466e+38;
-let MAX_U32: u32 = 4294967295u;
+const FLOAT_EPSILON: f32 = 1.0e-5;
+const MAX_FLOAT: f32 = 3.402823466e+38;
+const MAX_U32: u32 = 4294967295u;
 
 struct Ray {
     origin: vec3<f32>,
@@ -275,6 +275,6 @@ fn direct(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let hit = traverse_top(ray);
 
     let color = vec4<f32>(hit.intersection.uv, hit.intersection.distance, 1.0);
-    let location = vec2<i32>(invocation_id.xy);
-    textureStore(render_texture, location, color);
+    let last_location = vec2<i32>(invocation_id.xy);
+    textureStore(render_texture, last_location, color);
 }

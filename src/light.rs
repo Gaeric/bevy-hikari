@@ -7,8 +7,9 @@ use crate::{
 };
 use bevy::{
     pbr::{
-        GlobalLightMeta, GpuLights, GpuPointLights, LightMeta, ShadowPipeline, ViewClusterBindings,
+        GlobalLightMeta, GpuLights, GpuPointLights, LightMeta, ShadowSamplers, ViewClusterBindings,
         ViewLightsUniformOffset, ViewShadowBindings, CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT,
+        MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS,
     },
     prelude::*,
     render::{
@@ -18,7 +19,7 @@ use bevy::{
         renderer::{RenderContext, RenderDevice},
         texture::TextureCache,
         view::{ViewUniform, ViewUniformOffset, ViewUniforms},
-        RenderApp, RenderStage,
+        RenderApp, RenderSet,
     },
 };
 
@@ -31,16 +32,18 @@ impl Plugin for LightPlugin {
             render_app
                 .init_resource::<LightPipeline>()
                 .init_resource::<SpecializedComputePipelines<LightPipeline>>()
-                .add_system_to_stage(RenderStage::Prepare, prepare_light_pass_targets)
-                .add_system_to_stage(RenderStage::Queue, queue_light_pipelines)
-                .add_system_to_stage(RenderStage::Queue, queue_view_bind_groups)
-                .add_system_to_stage(RenderStage::Queue, queue_mesh_bind_group)
-                .add_system_to_stage(RenderStage::Queue, queue_deferred_bind_groups)
-                .add_system_to_stage(RenderStage::Queue, queue_render_bind_groups);
+                .init_resource::<CachedLightPipelines>()
+                .add_system(prepare_light_pass_targets.in_set(RenderSet::Prepare))
+                .add_system(queue_light_pipelines.in_set(RenderSet::Queue))
+                .add_system(queue_view_bind_groups.in_set(RenderSet::Queue))
+                .add_system(queue_mesh_bind_group.in_set(RenderSet::Queue))
+                .add_system(queue_deferred_bind_groups.in_set(RenderSet::Queue))
+                .add_system(queue_render_bind_groups.in_set(RenderSet::Queue));
         }
     }
 }
 
+#[derive(Resource, Debug)]
 pub struct LightPipeline {
     view_layout: BindGroupLayout,
     mesh_layout: BindGroupLayout,
@@ -302,12 +305,25 @@ impl SpecializedComputePipeline for LightPipeline {
             self.render_layout.clone(),
         ];
 
+        let mut shader_defs = vec![];
+
+        shader_defs.push(ShaderDefVal::UInt(
+            "MAX_CASCADES_PER_LIGHT".to_string(),
+            MAX_CASCADES_PER_LIGHT as u32,
+        ));
+
+        shader_defs.push(ShaderDefVal::Int(
+            "MAX_DIRECTIONAL_LIGHTS".to_string(),
+            MAX_DIRECTIONAL_LIGHTS as i32,
+        ));
+
         ComputePipelineDescriptor {
             label: None,
-            layout: Some(layout),
+            layout,
             shader: LIGHT_SHADER_HANDLE.typed::<Shader>(),
-            shader_defs: vec![],
+            shader_defs,
             entry_point: "direct".into(),
+            push_constant_ranges: vec![],
         }
     }
 }
@@ -342,6 +358,7 @@ fn prepare_light_pass_targets(
                         dimension: TextureDimension::D2,
                         format: TextureFormat::Rgba16Float,
                         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
+                        view_formats: &[],
                     },
                 )
                 .default_view;
@@ -353,8 +370,9 @@ fn prepare_light_pass_targets(
     }
 }
 
+#[derive(Resource, Default)]
 pub struct CachedLightPipelines {
-    direct: CachedComputePipelineId,
+    direct: Option<CachedComputePipelineId>,
 }
 
 fn queue_light_pipelines(
@@ -364,18 +382,26 @@ fn queue_light_pipelines(
     mut pipeline_cache: ResMut<PipelineCache>,
 ) {
     let direct = pipelines.specialize(&mut pipeline_cache, &pipeline, ());
-    commands.insert_resource(CachedLightPipelines { direct })
+
+    info!(
+        "insert CachedLightPipelines now, direct cached computed pipeline id: {:?}",
+        direct
+    );
+    commands.insert_resource(CachedLightPipelines {
+        direct: Some(direct),
+    })
 }
 
 #[derive(Component)]
 pub struct ViewBindGroup(BindGroup);
 
+// there are some bugs
 #[allow(clippy::too_many_arguments)]
 pub fn queue_view_bind_groups(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     pipeline: Res<LightPipeline>,
-    shadow_pipeline: Res<ShadowPipeline>,
+    shadow_samplers: Res<ShadowSamplers>,
     light_meta: Res<LightMeta>,
     global_light_meta: Res<GlobalLightMeta>,
     view_uniforms: Res<ViewUniforms>,
@@ -405,7 +431,7 @@ pub fn queue_view_bind_groups(
                     },
                     BindGroupEntry {
                         binding: 3,
-                        resource: BindingResource::Sampler(&shadow_pipeline.point_light_sampler),
+                        resource: BindingResource::Sampler(&shadow_samplers.point_light_sampler),
                     },
                     BindGroupEntry {
                         binding: 4,
@@ -416,7 +442,7 @@ pub fn queue_view_bind_groups(
                     BindGroupEntry {
                         binding: 5,
                         resource: BindingResource::Sampler(
-                            &shadow_pipeline.directional_light_sampler,
+                            &shadow_samplers.directional_light_sampler,
                         ),
                     },
                     BindGroupEntry {
@@ -441,6 +467,7 @@ pub fn queue_view_bind_groups(
     }
 }
 
+#[derive(Resource, Debug)]
 pub struct MeshBindGroup(BindGroup);
 
 fn queue_mesh_bind_group(
@@ -605,7 +632,7 @@ impl Node for LightPassNode {
         let pipeline_cache = world.resource::<PipelineCache>();
 
         let mut pass = render_context
-            .command_encoder
+            .command_encoder()
             .begin_compute_pass(&ComputePassDescriptor::default());
 
         pass.set_bind_group(
@@ -617,14 +644,22 @@ impl Node for LightPassNode {
         pass.set_bind_group(2, &deferred_bind_group.0, &[]);
         pass.set_bind_group(3, &render_bind_group.0, &[]);
 
-        let direct_pipeline = pipeline_cache
-            .get_compute_pipeline(pipelines.direct)
-            .unwrap();
-        pass.set_pipeline(direct_pipeline);
+        debug!("pipelines.direct is {:?}", pipelines.direct);
+        // why here not direc_pipeline?
+        for pipeline in pipeline_cache.pipelines() {
+            debug!("there are some pipelines: {:?}", pipeline.state);
+        }
 
-        let size = camera.physical_target_size.unwrap();
-        let count = (size + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
-        pass.dispatch_workgroups(count.x, count.y, 1);
+        if let Some(direct_pipeline) = pipeline_cache.get_compute_pipeline(pipelines.direct.unwrap()) {
+            info!("direct_pipeline is {:?}", direct_pipeline);
+            pass.set_pipeline(direct_pipeline);
+
+            let size = camera.physical_target_size.unwrap();
+            let count = (size + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+            pass.dispatch_workgroups(count.x, count.y, 1);
+        } else {
+            warn!("there not have direct_pipeline");
+        }
 
         Ok(())
     }
