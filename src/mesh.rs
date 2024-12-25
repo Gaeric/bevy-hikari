@@ -23,9 +23,9 @@ use std::collections::BTreeMap;
 pub struct MeshPlugin;
 impl Plugin for MeshPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(UniformComponentPlugin::<PreviousMeshUniform>::default())
+        app.add_plugins(UniformComponentPlugin::<PreviousMeshUniform>::default())
             .add_event::<MeshInstanceEvent>()
-            .add_system(mesh_instance_system);
+            .add_systems(Update, mesh_instance_system);
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
@@ -34,27 +34,26 @@ impl Plugin for MeshPlugin {
                 .init_resource::<MeshRenderAssets>()
                 .init_resource::<MeshAssetState>()
                 .init_resource::<MeshInstanceState>()
-                .add_system(
-                    extract_mesh_assets
-                        .in_set(RenderSet::ExtractCommands)
-                        .in_schedule(ExtractSchedule),
+                .add_systems(
+                    ExtractSchedule,
+                    extract_mesh_assets.in_set(RenderSet::ExtractCommands),
                 )
-                .add_system(
-                    extract_mesh_instances
-                        .in_set(RenderSet::ExtractCommands)
-                        .in_schedule(ExtractSchedule),
+                .add_systems(
+                    ExtractSchedule,
+                    extract_mesh_instances.in_set(RenderSet::ExtractCommands),
                 )
-                .add_system(
-                    extract_meshes
-                        .in_set(RenderSet::ExtractCommands)
-                        .in_schedule(ExtractSchedule),
+                .add_systems(
+                    ExtractSchedule,
+                    extract_meshes.in_set(RenderSet::ExtractCommands),
                 )
-                .add_system(
+                .add_systems(
+                    Update,
                     prepare_mesh_assets
                         .in_set(RenderSet::Prepare)
                         .in_set(MeshSystems::PrepareMeshAssets),
                 )
-                .add_system(
+                .add_systems(
+                    Update,
                     prepare_mesh_instances
                         .in_set(RenderSet::Prepare)
                         .in_set(MeshSystems::PrepareMeshInstances)
@@ -480,6 +479,7 @@ fn extract_meshes(
 #[derive(Default, Deref, DerefMut, Resource)]
 pub struct GpuMeshInstances(BTreeMap<Entity, (Handle<Mesh>, GpuInstance)>);
 
+#[derive(Event)]
 pub enum MeshInstanceEvent {
     Created(Entity, Handle<Mesh>),
     Modified(Entity, Handle<Mesh>),

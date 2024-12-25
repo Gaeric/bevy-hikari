@@ -6,20 +6,20 @@ use crate::{
     LIGHT_SHADER_HANDLE,
 };
 use bevy::{
+    ecs::query::QueryItem,
     pbr::{
-        GlobalLightMeta, GpuLights, GpuPointLights, LightMeta, MeshPipelineKey, ShadowSamplers,
-        ViewClusterBindings, ViewLightsUniformOffset, ViewShadowBindings,
-        CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS,
+        GlobalLightMeta, GpuLights, GpuPointLights, LightMeta, ShadowSamplers, ViewClusterBindings,
+        ViewLightsUniformOffset, ViewShadowBindings, CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT,
     },
     prelude::*,
     render::{
         camera::ExtractedCamera,
-        render_graph::{Node, NodeRunError, RenderGraphContext, SlotInfo, SlotType},
+        render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
         texture::TextureCache,
         view::{ViewUniform, ViewUniformOffset, ViewUniforms},
-        RenderApp, RenderSet,
+        Render, RenderApp, RenderSet,
     },
 };
 
@@ -30,19 +30,29 @@ impl Plugin for LightPlugin {
     fn build(&self, app: &mut App) {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
-                .init_resource::<LightPipeline>()
                 .init_resource::<SpecializedComputePipelines<LightPipeline>>()
-                .add_system(prepare_light_pass_targets.in_set(RenderSet::Prepare))
-                .add_system(queue_light_pipelines.in_set(RenderSet::Queue))
-                .add_system(queue_view_bind_groups.in_set(RenderSet::Queue))
-                .add_system(queue_mesh_bind_group.in_set(RenderSet::Queue))
-                .add_system(queue_deferred_bind_groups.in_set(RenderSet::Queue))
-                .add_system(queue_render_bind_groups.in_set(RenderSet::Queue));
+                .add_systems(
+                    Render,
+                    (
+                        prepare_light_pass_targets.in_set(RenderSet::Prepare),
+                        queue_light_pipelines.in_set(RenderSet::Queue),
+                        queue_view_bind_groups.in_set(RenderSet::Queue),
+                        queue_mesh_bind_group.in_set(RenderSet::Queue),
+                        queue_deferred_bind_groups.in_set(RenderSet::Queue),
+                        queue_render_bind_groups.in_set(RenderSet::Queue),
+                    ),
+                );
         }
+    }
+
+    fn finish(&self, app: &mut App) {
+        app.get_sub_app_mut(RenderApp)
+            .unwrap()
+            .init_resource::<LightPipeline>();
     }
 }
 
-#[derive(Resource, Debug)]
+#[derive(Resource)]
 pub struct LightPipeline {
     view_layout: BindGroupLayout,
     mesh_layout: BindGroupLayout,
@@ -87,10 +97,7 @@ impl FromWorld for LightPipeline {
                     ty: BindingType::Texture {
                         multisampled: false,
                         sample_type: TextureSampleType::Depth,
-                        #[cfg(not(feature = "webgl"))]
                         view_dimension: TextureViewDimension::CubeArray,
-                        #[cfg(feature = "webgl")]
-                        view_dimension: TextureViewDimension::Cube,
                     },
                     count: None,
                 },
@@ -108,10 +115,7 @@ impl FromWorld for LightPipeline {
                     ty: BindingType::Texture {
                         multisampled: false,
                         sample_type: TextureSampleType::Depth,
-                        #[cfg(not(feature = "webgl"))]
                         view_dimension: TextureViewDimension::D2Array,
-                        #[cfg(feature = "webgl")]
-                        view_dimension: TextureViewDimension::D2,
                     },
                     count: None,
                 },
@@ -304,23 +308,11 @@ impl SpecializedComputePipeline for LightPipeline {
             self.render_layout.clone(),
         ];
 
-        let mut shader_defs = vec![];
-
-        shader_defs.push(ShaderDefVal::UInt(
-            "MAX_CASCADES_PER_LIGHT".to_string(),
-            MAX_CASCADES_PER_LIGHT as u32,
-        ));
-
-        shader_defs.push(ShaderDefVal::Int(
-            "MAX_DIRECTIONAL_LIGHTS".to_string(),
-            MAX_DIRECTIONAL_LIGHTS as i32,
-        ));
-
         ComputePipelineDescriptor {
             label: None,
             layout,
             shader: LIGHT_SHADER_HANDLE.typed::<Shader>(),
-            shader_defs,
+            shader_defs: Vec::new(),
             entry_point: "direct".into(),
             push_constant_ranges: vec![],
         }
@@ -382,7 +374,7 @@ fn queue_light_pipelines(
 ) {
     for pipeline in pipeline_cache.pipelines() {
         info!(
-            "before cache pipeline,  queue pipeline_cahce: {:?}",
+            "before cache pipeline,  queue pipeline_cache: {:?}",
             pipeline.state
         );
     }
@@ -390,7 +382,7 @@ fn queue_light_pipelines(
     let direct = pipelines.specialize(&mut pipeline_cache, &pipeline, ());
 
     for pipeline in pipeline_cache.pipelines() {
-        info!("queue pipeline_cahce: {:?}", pipeline.state);
+        info!("queue pipeline_cache: {:?}", pipeline.state);
     }
 
     info!(
@@ -587,57 +579,46 @@ fn queue_render_bind_groups(
     }
 }
 
-pub struct LightPassNode {
-    query: QueryState<(
+#[derive(Default, Debug)]
+pub struct LightPassNode;
+
+impl ViewNode for LightPassNode {
+    type ViewQuery = (
         &'static ExtractedCamera,
         &'static ViewUniformOffset,
         &'static ViewLightsUniformOffset,
         &'static ViewBindGroup,
         &'static DeferredBindGroup,
         &'static RenderBindGroup,
-    )>,
-}
-
-impl LightPassNode {
-    pub const IN_VIEW: &'static str = "view";
-
-    pub fn new(world: &mut World) -> Self {
-        Self {
-            query: world.query_filtered(),
-        }
-    }
-}
-
-impl Node for LightPassNode {
-    fn input(&self) -> Vec<SlotInfo> {
-        vec![SlotInfo::new(Self::IN_VIEW, SlotType::Entity)]
-    }
-
-    fn update(&mut self, world: &mut World) {
-        self.query.update_archetypes(world);
-    }
+    );
 
     fn run(
         &self,
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        world: &World,
-    ) -> Result<(), NodeRunError> {
-        let entity = graph.get_input_entity(Self::IN_VIEW)?;
-        let (
+        (
             camera,
             view_uniform,
             view_lights,
             view_bind_group,
             deferred_bind_group,
             render_bind_group,
-        ) = match self.query.get_manual(world, entity) {
-            Ok(query) => query,
-            Err(_) => return Ok(()),
+        ): QueryItem<Self::ViewQuery>,
+        world: &World,
+    ) -> Result<(), NodeRunError> {
+        let _entity = graph.view_entity();
+
+        let (Some(mesh_bind_group), Some(pipelines), Some(pipeline_cache)) = (
+            world.get_resource::<MeshBindGroup>(),
+            world.get_resource::<CachedLightPipelines>(),
+            world.get_resource::<PipelineCache>(),
+        ) else {
+            return Ok(());
         };
-        let mesh_bind_group = world.resource::<MeshBindGroup>();
-        let pipelines = world.resource::<CachedLightPipelines>();
-        let pipeline_cache = world.resource::<PipelineCache>();
+
+        // let mesh_bind_group = world.resource::<MeshBindGroup>();
+        // let pipelines = world.resource::<CachedLightPipelines>();
+        // let pipeline_cache = world.resource::<PipelineCache>();
 
         let mut pass = render_context
             .command_encoder()

@@ -1,5 +1,7 @@
-#import bevy_pbr::mesh_view_types
-#import bevy_pbr::mesh_types
+#import bevy_render::view  View
+#import bevy_pbr::mesh_types Mesh
+#import bevy_pbr::mesh_functions mesh_position_local_to_world
+#import bevy_pbr::mesh_functions mesh_normal_local_to_world
 
 struct PreviousView {
     view_proj: mat4x4<f32>,
@@ -20,8 +22,6 @@ var<uniform> previous_view: PreviousView;
 var<uniform> mesh: Mesh;
 @group(1) @binding(1)
 var<uniform> previous_mesh: PreviousMesh;
-
-#import bevy_pbr::mesh_functions
 
 struct Vertex {
     @location(0) position: vec3<f32>,

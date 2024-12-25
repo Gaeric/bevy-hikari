@@ -1,12 +1,14 @@
 use bevy::{
     asset::load_internal_asset,
     core_pipeline::{
-        core_3d::MainPass3dNode, tonemapping::TonemappingNode, upscaling::UpscalingNode,
+        core_3d::{MainOpaquePass3dNode, MainTransparentPass3dNode},
+        tonemapping::TonemappingNode,
+        upscaling::UpscalingNode,
     },
     prelude::*,
     reflect::TypeUuid,
     render::{
-        render_graph::{EmptyNode, RenderGraph, SlotInfo, SlotType},
+        render_graph::{EmptyNode, RenderGraphApp, ViewNodeRunner},
         RenderApp,
     },
 };
@@ -61,128 +63,50 @@ impl Plugin for HikariPlugin {
             "shaders/light.wgsl",
             Shader::from_wgsl
         );
-        // load_internal_asset!(
-        //     app,
-        //     RAY_TRACING_TYPES_HANDLE,
-        //     "shaders/ray_tracing_types.wgsl",
-        //     Shader::from_wgsl
-        // );
-        // load_internal_asset!(
-        //     app,
-        //     RAY_TRACING_BINDINGS_HANDLE,
-        //     "shaders/ray_tracing_bindings.wgsl",
-        //     Shader::from_wgsl
-        // );
-        // load_internal_asset!(
-        //     app,
-        //     RAY_TRACING_FUNCTIONS_HANDLE,
-        //     "shaders/ray_tracing_functions.wgsl",
-        //     Shader::from_wgsl
-        // );
 
-        app.add_plugin(TransformPlugin)
-            .add_plugin(ViewPlugin)
-            .add_plugin(MeshPlugin)
-            .add_plugin(PrepassPlugin)
-            .add_plugin(LightPlugin);
+        app.add_plugins((
+            TransformPlugin,
+            ViewPlugin,
+            MeshPlugin,
+            PrepassPlugin,
+            LightPlugin,
+        ));
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            // shine node
-            let prepass_node = PrepassNode::new(&mut render_app.world);
-            let light_pass_node = LightPassNode::new(&mut render_app.world);
+        let render_app = match app.get_sub_app_mut(RenderApp) {
+            Ok(render_app) => render_app,
+            Err(_) => return,
+        };
 
-            // core3d
-            // let prepass_node = PrepassNode::new(&mut render_app.world);
-            let pass_node_3d = MainPass3dNode::new(&mut render_app.world);
-            let tonemapping = TonemappingNode::new(&mut render_app.world);
-            let upscaling = UpscalingNode::new(&mut render_app.world);
-
-            let mut graph = render_app.world.resource_mut::<RenderGraph>();
-
-            let mut shine_graph = RenderGraph::default();
-
-            shine_graph.add_node(
-                bevy::core_pipeline::core_3d::graph::node::PREPASS,
-                prepass_node,
+        use bevy::core_pipeline::core_3d::graph::node::*;
+        render_app
+            .add_render_sub_graph(graph::NAME)
+            .add_render_graph_node::<ViewNodeRunner<PrepassNode>>(graph::NAME, &graph::node::PREPASS)
+            .add_render_graph_node::<ViewNodeRunner<LightPassNode>>(graph::NAME, &graph::node::LIGHT_DIRECT_PASS)
+            .add_render_graph_node::<EmptyNode>(graph::NAME, START_MAIN_PASS)
+            .add_render_graph_node::<ViewNodeRunner<MainOpaquePass3dNode>>(
+                graph::NAME,
+                MAIN_OPAQUE_PASS,
+            )
+            .add_render_graph_node::<ViewNodeRunner<MainTransparentPass3dNode>>(
+                graph::NAME,
+                MAIN_TRANSPARENT_PASS,
+            )
+            .add_render_graph_node::<EmptyNode>(graph::NAME, END_MAIN_PASS)
+            .add_render_graph_node::<ViewNodeRunner<TonemappingNode>>(graph::NAME, TONEMAPPING)
+            .add_render_graph_node::<EmptyNode>(graph::NAME, END_MAIN_PASS_POST_PROCESSING)
+            .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(graph::NAME, UPSCALING)
+            .add_render_graph_edges(
+                graph::NAME,
+                &[
+                    PREPASS,
+                    START_MAIN_PASS,
+                    MAIN_OPAQUE_PASS,
+                    MAIN_TRANSPARENT_PASS,
+                    END_MAIN_PASS,
+                    TONEMAPPING,
+                    END_MAIN_PASS_POST_PROCESSING,
+                    UPSCALING,
+                ],
             );
-
-            shine_graph.add_node(
-                bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
-                pass_node_3d,
-            );
-            shine_graph.add_node(
-                bevy::core_pipeline::core_3d::graph::node::TONEMAPPING,
-                tonemapping,
-            );
-            shine_graph.add_node(
-                bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS_POST_PROCESSING,
-                EmptyNode,
-            );
-            shine_graph.add_node(
-                bevy::core_pipeline::core_3d::graph::node::UPSCALING,
-                upscaling,
-            );
-
-            shine_graph.add_node(graph::node::LIGHT_DIRECT_PASS, light_pass_node);
-
-            let input_node_id = shine_graph.set_input(vec![SlotInfo::new(
-                graph::input::VIEW_ENTITY,
-                SlotType::Entity,
-            )]);
-
-            shine_graph.add_slot_edge(
-                input_node_id,
-                graph::input::VIEW_ENTITY,
-                graph::node::PREPASS,
-                PrepassNode::IN_VIEW,
-            );
-            shine_graph.add_slot_edge(
-                input_node_id,
-                graph::input::VIEW_ENTITY,
-                graph::node::LIGHT_DIRECT_PASS,
-                LightPassNode::IN_VIEW,
-            );
-            shine_graph.add_slot_edge(
-                input_node_id,
-                graph::input::VIEW_ENTITY,
-                bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
-                MainPass3dNode::IN_VIEW,
-            );
-            shine_graph.add_slot_edge(
-                input_node_id,
-                graph::input::VIEW_ENTITY,
-                bevy::core_pipeline::core_3d::graph::node::TONEMAPPING,
-                TonemappingNode::IN_VIEW,
-            );
-            shine_graph.add_slot_edge(
-                input_node_id,
-                graph::input::VIEW_ENTITY,
-                bevy::core_pipeline::core_3d::graph::node::UPSCALING,
-                UpscalingNode::IN_VIEW,
-            );
-            shine_graph.add_node_edge(
-                graph::node::PREPASS,
-                bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
-            );
-            shine_graph.add_node_edge(graph::node::PREPASS, graph::node::LIGHT_DIRECT_PASS);
-            shine_graph.add_node_edge(
-                graph::node::LIGHT_DIRECT_PASS,
-                bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
-            );
-            shine_graph.add_node_edge(
-                bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
-                bevy::core_pipeline::core_3d::graph::node::TONEMAPPING,
-            );
-            shine_graph.add_node_edge(
-                bevy::core_pipeline::core_3d::graph::node::TONEMAPPING,
-                bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS_POST_PROCESSING,
-            );
-            shine_graph.add_node_edge(
-                bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS_POST_PROCESSING,
-                bevy::core_pipeline::core_3d::graph::node::UPSCALING,
-            );
-
-            graph.add_sub_graph(graph::NAME, shine_graph);
-        }
     }
 }

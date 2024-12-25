@@ -1,4 +1,4 @@
-#import bevy_pbr::mesh_view_bindings
+#import bevy_pbr::mesh_view_bindings  view
 
 struct Vertex {
     position: vec3<f32>,
