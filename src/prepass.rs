@@ -42,7 +42,9 @@ impl Plugin for PrepassPlugin {
     fn build(&self, app: &mut App) {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
+                // [0.8] refer Opaque3d
                 .init_resource::<DrawFunctions<Prepass>>()
+                // [0.8] animate_shader: CustomMaterialPlugin CustomPipeline
                 .init_resource::<PrepassPipeline>()
                 .init_resource::<SpecializedMeshPipelines<PrepassPipeline>>()
                 .add_render_command::<Prepass, DrawPrepass>()
@@ -449,6 +451,7 @@ impl CachedRenderPipelinePhaseItem for Prepass {
     }
 }
 
+// [0.8] maybe could refer DrawShadowMesh
 type DrawPrepass = (
     SetItemPipeline,
     SetPrepassViewBindGroup<0>,

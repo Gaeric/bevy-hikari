@@ -598,6 +598,7 @@ pub struct ViewBindGroup(pub BindGroup);
 
 // [0.8] refer queue_mesh_view_bind_groups
 // [0.8] refer compute_shader_game_of_life queue_bind_group
+// maybe we can get the resource once instead of every frame
 #[allow(clippy::too_many_arguments)]
 pub fn queue_view_bind_groups(
     mut commands: Commands,
@@ -913,6 +914,7 @@ impl Node for LightPassNode {
             .command_encoder
             .begin_compute_pass(&ComputePassDescriptor::default());
 
+        // bind_group should match Compute Descriptor
         pass.set_bind_group(
             0,
             &view_bind_group.0,
