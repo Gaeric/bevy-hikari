@@ -20,22 +20,26 @@ impl Plugin for ViewPlugin {
     }
 }
 
+// [0.8] refer ViewUniform
 #[derive(Clone, ShaderType)]
 pub struct PreviousViewUniform {
     view_proj: Mat4,
     inverse_view_proj: Mat4,
 }
 
+// [0.8] refer ViewUniforms
 #[derive(Default)]
 pub struct PreviousViewUniforms {
     pub uniforms: DynamicUniformBuffer<PreviousViewUniform>,
 }
 
+// [0.8] refer ViewUniformOffset
 #[derive(Component)]
 pub struct PreviousViewUniformOffset {
     pub offset: u32,
 }
 
+// [0.8] refer prepare_view_uniforms
 fn prepare_view_uniforms(
     mut commands: Commands,
     render_device: Res<RenderDevice>,

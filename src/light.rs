@@ -50,6 +50,7 @@ impl Plugin for LightPlugin {
     }
 }
 
+// [0.8] refer MeshPipeline
 pub struct LightPipeline {
     pub view_layout: BindGroupLayout,
     pub deferred_layout: BindGroupLayout,
@@ -60,6 +61,7 @@ pub struct LightPipeline {
     pub dummy_white_gpu_image: GpuImage,
 }
 
+// [0.8] use for init resource
 impl FromWorld for LightPipeline {
     fn from_world(world: &mut World) -> Self {
         let buffer_binding_type = BufferBindingType::Storage { read_only: true };
@@ -68,6 +70,9 @@ impl FromWorld for LightPipeline {
         let mesh_pipeline = world.resource::<MeshPipeline>();
         let mesh_material_layout = world.resource::<MeshMaterialBindGroupLayout>().0.clone();
 
+        // [0.8] refer mesh_view_bindings.wgsl
+        // view_layout reuse mesh_view_bindings group and layout
+        // so this bindding group match mesh_view_bindings.wgsl
         let view_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             entries: &[
                 // View
@@ -179,6 +184,7 @@ impl FromWorld for LightPipeline {
             label: None,
         });
 
+        // deffered_layout use self group and layout
         let deferred_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: None,
             entries: &[
@@ -447,6 +453,7 @@ pub struct LightPassTarget {
     pub reservoir: [Reservoir; 2],
 }
 
+// prepare resource for LightPassTarget
 fn prepare_light_pass_targets(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
@@ -527,12 +534,14 @@ pub struct FrameUniform {
     pub buffer: UniformBuffer<GpuFrame>,
 }
 
+// prepare filter kernel
 fn prepare_frame_uniform(
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     mut uniform: ResMut<FrameUniform>,
     mut counter: ResMut<FrameCounter>,
 ) {
+    // this function run every frame
     let mut kernel = [Vec3::ZERO; 25];
     for i in 0..5 {
         for j in 0..5 {
@@ -587,6 +596,8 @@ fn queue_light_pipelines(
 #[derive(Component)]
 pub struct ViewBindGroup(pub BindGroup);
 
+// [0.8] refer queue_mesh_view_bind_groups
+// [0.8] refer compute_shader_game_of_life queue_bind_group
 #[allow(clippy::too_many_arguments)]
 pub fn queue_view_bind_groups(
     mut commands: Commands,
@@ -598,6 +609,7 @@ pub fn queue_view_bind_groups(
     view_uniforms: Res<ViewUniforms>,
     views: Query<(Entity, &ViewShadowBindings, &ViewClusterBindings)>,
 ) {
+    // [0.8] refer queue_shadow_view_bind_group
     if let (Some(view_binding), Some(light_binding), Some(point_light_binding)) = (
         view_uniforms.uniforms.binding(),
         light_meta.view_gpu_lights.binding(),
@@ -845,6 +857,7 @@ fn queue_light_bind_groups(
     }
 }
 
+// [0.8] refer prepare_lights
 pub struct LightPassNode {
     query: QueryState<(
         &'static ExtractedCamera,
@@ -865,6 +878,8 @@ impl LightPassNode {
     }
 }
 
+// [0.8] this is a compute node, could just refer GameOfLifeNode
+// [0.8] refer MainPass3dNode
 impl Node for LightPassNode {
     fn input(&self) -> Vec<SlotInfo> {
         vec![SlotInfo::new(Self::IN_VIEW, SlotType::Entity)]
@@ -874,6 +889,7 @@ impl Node for LightPassNode {
         self.query.update_archetypes(world);
     }
 
+    // [0.8] refer MainPass3dNode
     fn run(
         &self,
         graph: &mut RenderGraphContext,

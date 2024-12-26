@@ -38,6 +38,7 @@ pub mod graph {
 pub const WORKGROUP_SIZE: u32 = 8;
 pub const NOISE_TEXTURE_COUNT: usize = 64;
 
+// refer mesh.rs
 pub const MESH_MATERIAL_TYPES_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 15819591594687298858);
 pub const MESH_MATERIAL_BINDINGS_HANDLE: HandleUntyped =
@@ -73,11 +74,12 @@ impl Default for HikariPlugin {
     }
 }
 
-// [0.9] refer from compute_shader_game_of_life GameOfLifeImage 
+// [0.8] refer from compute_shader_game_of_life GameOfLifeImage 
 // 
 #[derive(Clone, Deref, DerefMut, ExtractResource)]
 pub struct NoiseTexture(pub Vec<Handle<Image>>);
 
+// [0.8] refer PbrPlugin
 impl Plugin for HikariPlugin {
     fn build(&self, app: &mut App) {
         load_internal_asset!(
@@ -171,6 +173,7 @@ impl Plugin for HikariPlugin {
             hikari_graph
                 .add_node_edge(graph::node::PREPASS, graph::node::LIGHT_DIRECT_PASS)
                 .unwrap();
+            // refer MainPass3dNode
             hikari_graph
                 .add_slot_edge(
                     input_node_id,

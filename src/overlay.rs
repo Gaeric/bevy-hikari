@@ -82,6 +82,7 @@ impl FromWorld for OverlayPipeline {
     }
 }
 
+// [0.8] refer MeshPipeline
 impl SpecializedMeshPipeline for OverlayPipeline {
     type Key = MeshPipelineKey;
 
@@ -132,6 +133,7 @@ impl SpecializedMeshPipeline for OverlayPipeline {
     }
 }
 
+// [0.8] refer extract_core_3d_camera_phases
 fn extract_overlay_camera_phases(
     mut commands: Commands,
     cameras_3d: Extract<Query<(Entity, &Camera), With<Camera3d>>>,
@@ -210,6 +212,7 @@ fn queue_overlay_mesh(
     }
 }
 
+// [0.8] maybe refer from Qpaque3d
 pub struct Overlay {
     pub distance: f32,
     pub entity: Entity,
@@ -245,6 +248,7 @@ impl CachedRenderPipelinePhaseItem for Overlay {
     }
 }
 
+// [0.8] refer DrawWireframes
 type DrawOverlay = (SetItemPipeline, SetOverlayBindGroup<0>, DrawMesh);
 
 pub struct SetOverlayBindGroup<const I: usize>;
@@ -286,6 +290,7 @@ impl OverlayPassNode {
     }
 }
 
+// [0.8] refer MainPass3dNode
 impl Node for OverlayPassNode {
     fn input(&self) -> Vec<SlotInfo> {
         vec![SlotInfo::new(Self::IN_VIEW, SlotType::Entity)]
@@ -308,6 +313,7 @@ impl Node for OverlayPassNode {
             Err(_) => return Ok(()),
         };
 
+        // [0.8] refer MainPass3dNode::run() main_opaque_pass_3d section
         {
             #[cfg(feature = "trace")]
             let _main_prepass_span = info_span!("main_prepass").entered();
