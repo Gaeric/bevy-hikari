@@ -4,8 +4,7 @@ use bevy::{
     prelude::*,
     reflect::TypeUuid,
     render::{
-        render_graph::{RenderGraph, SlotInfo, SlotType},
-        RenderApp,
+        extract_resource::ExtractResource, render_graph::{RenderGraph, SlotInfo, SlotType}, RenderApp
     },
 };
 use light::{LightPassNode, LightPlugin};
@@ -74,7 +73,9 @@ impl Default for HikariPlugin {
     }
 }
 
-#[derive(Clone, Deref, DerefMut)]
+// [0.9] refer from compute_shader_game_of_life GameOfLifeImage 
+// 
+#[derive(Clone, Deref, DerefMut, ExtractResource)]
 pub struct NoiseTexture(pub Vec<Handle<Image>>);
 
 impl Plugin for HikariPlugin {

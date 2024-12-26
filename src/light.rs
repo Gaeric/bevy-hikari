@@ -11,13 +11,14 @@ use bevy::{
     prelude::*,
     render::{
         camera::ExtractedCamera,
+        extract_resource::ExtractResourcePlugin,
         render_asset::RenderAssets,
         render_graph::{Node, NodeRunError, RenderGraphContext, SlotInfo, SlotType},
         render_resource::*,
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::{GpuImage, TextureCache},
         view::{ViewUniform, ViewUniformOffset, ViewUniforms},
-        Extract, RenderApp, RenderStage,
+        RenderApp, RenderStage,
     },
 };
 use std::num::NonZeroU32;
@@ -32,13 +33,14 @@ pub const RANDOM_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 pub struct LightPlugin;
 impl Plugin for LightPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugin(ExtractResourcePlugin::<NoiseTexture>::default());
+
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<FrameCounter>()
                 .init_resource::<LightPipeline>()
                 .init_resource::<SpecializedComputePipelines<LightPipeline>>()
                 .init_resource::<FrameUniform>()
-                .add_system_to_stage(RenderStage::Extract, extract_noise_texture)
                 .add_system_to_stage(RenderStage::Prepare, prepare_light_pass_targets)
                 .add_system_to_stage(RenderStage::Prepare, prepare_frame_uniform)
                 .add_system_to_stage(RenderStage::Queue, queue_view_bind_groups)
@@ -46,10 +48,6 @@ impl Plugin for LightPlugin {
                 .add_system_to_stage(RenderStage::Queue, queue_light_pipelines);
         }
     }
-}
-
-fn extract_noise_texture(mut commands: Commands, noise_texture: Extract<Res<NoiseTexture>>) {
-    commands.insert_resource(noise_texture.clone());
 }
 
 pub struct LightPipeline {
