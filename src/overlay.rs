@@ -107,7 +107,6 @@ impl SpecializedMeshPipeline for OverlayPipeline {
             MAX_CASCADES_PER_LIGHT as i32,
         ));
 
-
         Ok(RenderPipelineDescriptor {
             label: None,
             layout: bind_group_layout,
@@ -238,6 +237,11 @@ impl PhaseItem for Overlay {
     type SortKey = FloatOrd;
 
     #[inline]
+    fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    #[inline]
     fn sort_key(&self) -> Self::SortKey {
         FloatOrd(self.distance)
     }
@@ -245,11 +249,6 @@ impl PhaseItem for Overlay {
     #[inline]
     fn draw_function(&self) -> DrawFunctionId {
         self.draw_function
-    }
-
-    #[inline]
-    fn entity(&self) -> Entity {
-        self.entity
     }
 }
 
@@ -266,16 +265,18 @@ type DrawOverlay = (SetItemPipeline, SetOverlayBindGroup<0>, DrawMesh);
 pub struct SetOverlayBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOverlayBindGroup<I> {
     type Param = ();
-    type ViewWorldQuery = ();
-    type ItemWorldQuery = Read<OverlayBindGroup>;
+    type ViewWorldQuery = Read<OverlayBindGroup>;
+    type ItemWorldQuery = ();
 
+    #[inline]
     fn render<'w>(
-        item: &P,
-        view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
-        bind_group: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
+        _item: &P,
+        bind_group: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
+        _: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
         param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
+        trace!("render overlay");
         pass.set_bind_group(I, &bind_group.0, &[]);
         RenderCommandResult::Success
     }
@@ -319,18 +320,19 @@ impl Node for OverlayPassNode {
         render_context: &mut RenderContext,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        let entity = graph.get_input_entity(Self::IN_VIEW)?;
-        let (camera, overlay_phase, camera_3d, target) = match self.query.get_manual(world, entity)
-        {
-            Ok(query) => query,
-            Err(_) => return Ok(()),
-        };
+        let view_entity = graph.get_input_entity(Self::IN_VIEW)?;
+        let (camera, overlay_phase, camera_3d, target) =
+            match self.query.get_manual(world, view_entity) {
+                Ok(query) => query,
+                Err(_) => return Ok(()),
+            };
 
         // [0.8] refer MainPass3dNode::run() main_opaque_pass_3d section
         {
             #[cfg(feature = "trace")]
             let _main_prepass_span = info_span!("main_prepass").entered();
-            let pass_descriptor = RenderPassDescriptor {
+
+            let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("main_prepass"),
                 color_attachments: &[Some(target.get_color_attachment(Operations {
                     load: match camera_3d.clear_color {
@@ -343,13 +345,16 @@ impl Node for OverlayPassNode {
                     store: true,
                 }))],
                 depth_stencil_attachment: None,
-            };
-
-            let mut render_pass = render_context.begin_tracked_render_pass(pass_descriptor);
+            });
             if let Some(viewport) = camera.viewport.as_ref() {
                 render_pass.set_camera_viewport(viewport);
             }
-            overlay_phase.render(&mut render_pass, world, entity);
+            trace!("overlay phase render now");
+            for item in overlay_phase.items.iter() {
+                trace!("overlay phase item is {:?}", item.entity());
+            }
+
+            overlay_phase.render(&mut render_pass, world, view_entity);
         }
 
         Ok(())

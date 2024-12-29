@@ -10,7 +10,10 @@ use bevy::{
         lifetimeless::{Read, SRes},
         SystemParamItem,
     },
-    pbr::{DrawMesh, MeshPipelineKey, MeshUniform, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS, SHADOW_FORMAT},
+    pbr::{
+        DrawMesh, MeshPipelineKey, MeshUniform, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS,
+        SHADOW_FORMAT,
+    },
     prelude::*,
     render::{
         camera::ExtractedCamera,
@@ -155,7 +158,6 @@ impl SpecializedMeshPipeline for PrepassPipeline {
         ];
         let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
         let bind_group_layout = vec![self.view_layout.clone(), self.mesh_layout.clone()];
-
 
         let mut shader_defs = Vec::new();
         shader_defs.push(ShaderDefVal::Int(
@@ -507,21 +509,21 @@ pub struct SetPrepassMeshBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<I> {
     type Param = SRes<PrepassBindGroup>;
 
-    type ViewWorldQuery = (
+    type ViewWorldQuery = ();
+
+    type ItemWorldQuery = (
         Read<DynamicUniformIndex<MeshUniform>>,
         Read<DynamicUniformIndex<PreviousMeshUniform>>,
         Read<DynamicInstanceIndex>,
     );
 
-    type ItemWorldQuery = ();
-
     fn render<'w>(
         item: &P,
+        _view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
         (mesh_uniform, previous_mesh_uniform, instance_index): bevy::ecs::query::ROQueryItem<
             'w,
-            Self::ViewWorldQuery,
+            Self::ItemWorldQuery,
         >,
-        entity: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -577,6 +579,8 @@ impl Node for PrepassNode {
         world: &World,
     ) -> Result<(), NodeRunError> {
         let entity = graph.get_input_entity(Self::IN_VIEW)?;
+
+        trace!("entity is {:?}", entity);
         let (camera, prepass_phase, camera_3d, target) = match self.query.get_manual(world, entity)
         {
             Ok(query) => query,
@@ -628,6 +632,12 @@ impl Node for PrepassNode {
             if let Some(viewport) = camera.viewport.as_ref() {
                 render_pass.set_camera_viewport(viewport);
             }
+
+            trace!("prepass phase render now");
+            for item in prepass_phase.items.iter() {
+                trace!("prepass phase item is {:?}", item.entity());
+            }
+
             prepass_phase.render(&mut render_pass, world, entity);
         }
 

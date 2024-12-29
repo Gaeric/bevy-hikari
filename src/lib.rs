@@ -1,11 +1,11 @@
 use bevy::{
     asset::load_internal_asset,
-    core_pipeline::core_3d::MainPass3dNode,
+    core_pipeline::{core_2d::graph::node::END_MAIN_PASS_POST_PROCESSING, core_3d::MainPass3dNode},
     prelude::*,
     reflect::TypeUuid,
     render::{
         extract_resource::ExtractResource,
-        render_graph::{RenderGraph, SlotInfo, SlotType},
+        render_graph::{EmptyNode, RenderGraph, SlotInfo, SlotType},
         RenderApp,
     },
 };
@@ -148,10 +148,14 @@ impl Plugin for HikariPlugin {
 
             let mut graph = render_app.world.resource_mut::<RenderGraph>();
 
+            info!("origin graph is {:?}", graph);
+
             let mut hikari_graph = RenderGraph::default();
             hikari_graph.add_node(graph::node::PREPASS, prepass_node);
             hikari_graph.add_node(graph::node::LIGHT_DIRECT_PASS, light_pass_node);
             hikari_graph.add_node(graph::node::OVERLAY_PASS, overlay_pass_node);
+            hikari_graph.add_node(END_MAIN_PASS_POST_PROCESSING, EmptyNode);
+
             let input_node_id = hikari_graph.set_input(vec![SlotInfo::new(
                 graph::input::VIEW_ENTITY,
                 SlotType::Entity,
@@ -177,7 +181,11 @@ impl Plugin for HikariPlugin {
                 MainPass3dNode::IN_VIEW,
             );
             hikari_graph.add_node_edge(graph::node::LIGHT_DIRECT_PASS, graph::node::OVERLAY_PASS);
+            hikari_graph.add_node_edge(graph::node::OVERLAY_PASS, END_MAIN_PASS_POST_PROCESSING);
+            info!("hikari graph is {:?}", hikari_graph);
             graph.add_sub_graph(graph::NAME, hikari_graph);
+            info!("last graph is {:?}", graph);
         }
+
     }
 }

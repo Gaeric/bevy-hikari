@@ -601,7 +601,7 @@ fn queue_light_pipelines(
     });
 
     for pipeline in pipeline_cache.pipelines() {
-        info!("queue pipeline_cache: {:?}", pipeline.state);
+        trace!("queue pipeline_cache: {:?}", pipeline.state);
     }
 
     commands.insert_resource(CachedLightPipelines { direct_lit })

@@ -1,9 +1,9 @@
-use bevy::{pbr::PbrPlugin, prelude::*, render::camera::CameraRenderGraph};
+use bevy::{ecs::world, prelude::*, render::camera::CameraRenderGraph};
 use bevy_hikari::prelude::*;
 use std::f32::consts::PI;
 
 fn main() {
-    App::new()
+    let app = App::new()
         .insert_resource(Msaa::Sample4)
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
