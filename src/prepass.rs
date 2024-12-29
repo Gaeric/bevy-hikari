@@ -7,10 +7,10 @@ use crate::{
 };
 use bevy::{
     ecs::system::{
-        lifetimeless::{Read, SQuery, SRes},
+        lifetimeless::{Read, SRes},
         SystemParamItem,
     },
-    pbr::{DrawMesh, MeshPipelineKey, MeshUniform, SHADOW_FORMAT},
+    pbr::{DrawMesh, MeshPipelineKey, MeshUniform, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS, SHADOW_FORMAT},
     prelude::*,
     render::{
         camera::ExtractedCamera,
@@ -20,14 +20,14 @@ use bevy::{
         render_graph::{Node, NodeRunError, RenderGraphContext, SlotInfo, SlotType},
         render_phase::{
             sort_phase_system, AddRenderCommand, CachedRenderPipelinePhaseItem, DrawFunctionId,
-            DrawFunctions, EntityPhaseItem, EntityRenderCommand, PhaseItem, RenderCommandResult,
-            RenderPhase, SetItemPipeline, TrackedRenderPass,
+            DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult, RenderPhase,
+            SetItemPipeline, TrackedRenderPass,
         },
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
         texture::{GpuImage, TextureCache},
         view::{ExtractedView, ViewUniform, ViewUniformOffset, ViewUniforms, VisibleEntities},
-        Extract, RenderApp, RenderStage,
+        Extract, RenderApp, RenderSet,
     },
     utils::FloatOrd,
 };
@@ -48,15 +48,20 @@ impl Plugin for PrepassPlugin {
                 .init_resource::<PrepassPipeline>()
                 .init_resource::<SpecializedMeshPipelines<PrepassPipeline>>()
                 .add_render_command::<Prepass, DrawPrepass>()
-                .add_system_to_stage(RenderStage::Extract, extract_prepass_camera_phases)
-                .add_system_to_stage(RenderStage::Prepare, prepare_prepass_targets)
-                .add_system_to_stage(RenderStage::Queue, queue_prepass_meshes)
-                .add_system_to_stage(RenderStage::Queue, queue_prepass_bind_group)
-                .add_system_to_stage(RenderStage::PhaseSort, sort_phase_system::<Prepass>);
+                .add_system(
+                    extract_prepass_camera_phases
+                        .in_set(RenderSet::ExtractCommands)
+                        .in_schedule(ExtractSchedule),
+                )
+                .add_system(prepare_prepass_targets.in_set(RenderSet::Prepare))
+                .add_system(queue_prepass_meshes.in_set(RenderSet::Queue))
+                .add_system(queue_prepass_bind_group.in_set(RenderSet::Queue))
+                .add_system(sort_phase_system::<Prepass>.in_set(RenderSet::PhaseSort));
         }
     }
 }
 
+#[derive(Resource)]
 pub struct PrepassPipeline {
     pub view_layout: BindGroupLayout,
     pub mesh_layout: BindGroupLayout,
@@ -151,18 +156,29 @@ impl SpecializedMeshPipeline for PrepassPipeline {
         let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
         let bind_group_layout = vec![self.view_layout.clone(), self.mesh_layout.clone()];
 
+
+        let mut shader_defs = Vec::new();
+        shader_defs.push(ShaderDefVal::Int(
+            "MAX_DIRECTIONAL_LIGHTS".to_string(),
+            MAX_DIRECTIONAL_LIGHTS as i32,
+        ));
+        shader_defs.push(ShaderDefVal::Int(
+            "MAX_CASCADES_PER_LIGHT".to_string(),
+            MAX_CASCADES_PER_LIGHT as i32,
+        ));
+
         Ok(RenderPipelineDescriptor {
             label: None,
-            layout: Some(bind_group_layout),
+            layout: bind_group_layout,
             vertex: VertexState {
                 shader: PREPASS_SHADER_HANDLE.typed::<Shader>(),
-                shader_defs: vec![],
+                shader_defs: shader_defs.clone(),
                 entry_point: "vertex".into(),
                 buffers: vec![vertex_buffer_layout],
             },
             fragment: Some(FragmentState {
                 shader: PREPASS_SHADER_HANDLE.typed::<Shader>(),
-                shader_defs: vec![],
+                shader_defs: shader_defs.clone(),
                 entry_point: "fragment".into(),
                 targets: vec![
                     Some(ColorTargetState {
@@ -187,6 +203,7 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                     }),
                 ],
             }),
+            push_constant_ranges: Vec::new(),
             primitive: PrimitiveState {
                 topology: key.primitive_topology(),
                 strip_index_format: None,
@@ -276,6 +293,7 @@ fn prepare_prepass_targets(
                         dimension: TextureDimension::D2,
                         format: texture_format,
                         usage: texture_usage,
+                        view_formats: &[],
                     },
                 );
                 GpuImage {
@@ -284,6 +302,7 @@ fn prepare_prepass_targets(
                     texture_format,
                     sampler,
                     size,
+                    mip_level_count: 1,
                 }
             };
 
@@ -351,6 +370,7 @@ fn queue_prepass_meshes(
     }
 }
 
+#[derive(Resource, Debug)]
 pub struct PrepassBindGroup {
     pub view: BindGroup,
     pub mesh: BindGroup,
@@ -435,9 +455,7 @@ impl PhaseItem for Prepass {
     fn draw_function(&self) -> DrawFunctionId {
         self.draw_function
     }
-}
 
-impl EntityPhaseItem for Prepass {
     #[inline]
     fn entity(&self) -> Entity {
         self.entity
@@ -460,19 +478,21 @@ type DrawPrepass = (
 );
 
 pub struct SetPrepassViewBindGroup<const I: usize>;
-impl<const I: usize> EntityRenderCommand for SetPrepassViewBindGroup<I> {
-    type Param = (
-        SRes<PrepassBindGroup>,
-        SQuery<(Read<ViewUniformOffset>, Read<PreviousViewUniformOffset>)>,
-    );
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassViewBindGroup<I> {
+    type Param = SRes<PrepassBindGroup>;
+    type ViewWorldQuery = (Read<ViewUniformOffset>, Read<PreviousViewUniformOffset>);
+    type ItemWorldQuery = ();
 
     fn render<'w>(
-        view: Entity,
-        _item: Entity,
-        (bind_group, view_query): SystemParamItem<'w, '_, Self::Param>,
+        item: &P,
+        (view_uniform, previous_view_uniform): bevy::ecs::query::ROQueryItem<
+            'w,
+            Self::ViewWorldQuery,
+        >,
+        entity: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
+        bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (view_uniform, previous_view_uniform) = view_query.get_inner(view).unwrap();
         pass.set_bind_group(
             I,
             &bind_group.into_inner().view,
@@ -484,24 +504,27 @@ impl<const I: usize> EntityRenderCommand for SetPrepassViewBindGroup<I> {
 }
 
 pub struct SetPrepassMeshBindGroup<const I: usize>;
-impl<const I: usize> EntityRenderCommand for SetPrepassMeshBindGroup<I> {
-    type Param = (
-        SRes<PrepassBindGroup>,
-        SQuery<(
-            Read<DynamicUniformIndex<MeshUniform>>,
-            Read<DynamicUniformIndex<PreviousMeshUniform>>,
-            Read<DynamicInstanceIndex>,
-        )>,
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<I> {
+    type Param = SRes<PrepassBindGroup>;
+
+    type ViewWorldQuery = (
+        Read<DynamicUniformIndex<MeshUniform>>,
+        Read<DynamicUniformIndex<PreviousMeshUniform>>,
+        Read<DynamicInstanceIndex>,
     );
 
+    type ItemWorldQuery = ();
+
     fn render<'w>(
-        _view: Entity,
-        item: Entity,
-        (bind_group, mesh_query): SystemParamItem<'w, '_, Self::Param>,
+        item: &P,
+        (mesh_uniform, previous_mesh_uniform, instance_index): bevy::ecs::query::ROQueryItem<
+            'w,
+            Self::ViewWorldQuery,
+        >,
+        entity: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
+        bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (mesh_uniform, previous_mesh_uniform, instance_index) =
-            mesh_query.get_inner(item).unwrap();
         pass.set_bind_group(
             I,
             &bind_group.into_inner().mesh,
@@ -601,20 +624,11 @@ impl Node for PrepassNode {
                 }),
             };
 
-            let draw_functions = world.resource::<DrawFunctions<Prepass>>();
-
-            let render_pass = render_context
-                .command_encoder
-                .begin_render_pass(&pass_descriptor);
-            let mut draw_functions = draw_functions.write();
-            let mut tracked_pass = TrackedRenderPass::new(render_pass);
+            let mut render_pass = render_context.begin_tracked_render_pass(pass_descriptor);
             if let Some(viewport) = camera.viewport.as_ref() {
-                tracked_pass.set_camera_viewport(viewport);
+                render_pass.set_camera_viewport(viewport);
             }
-            for item in &prepass_phase.items {
-                let draw_function = draw_functions.get_mut(item.draw_function).unwrap();
-                draw_function.draw(world, &mut tracked_pass, entity, item);
-            }
+            prepass_phase.render(&mut render_pass, world, entity);
         }
 
         Ok(())

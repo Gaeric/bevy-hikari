@@ -5,8 +5,9 @@ use crate::{
 };
 use bevy::{
     pbr::{
-        GlobalLightMeta, GpuLights, GpuPointLights, LightMeta, MeshPipeline, ShadowPipeline,
-        ViewClusterBindings, ViewLightsUniformOffset, ViewShadowBindings,
+        GlobalLightMeta, GpuLights, GpuPointLights, LightMeta, MeshPipeline, ShadowSamplers,
+        ViewClusterBindings, ViewLightsUniformOffset, ViewShadowBindings, MAX_CASCADES_PER_LIGHT,
+        MAX_DIRECTIONAL_LIGHTS,
     },
     prelude::*,
     render::{
@@ -18,7 +19,7 @@ use bevy::{
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::{GpuImage, TextureCache},
         view::{ViewUniform, ViewUniformOffset, ViewUniforms},
-        RenderApp, RenderStage,
+        RenderApp, RenderSet,
     },
 };
 use std::num::NonZeroU32;
@@ -41,16 +42,17 @@ impl Plugin for LightPlugin {
                 .init_resource::<LightPipeline>()
                 .init_resource::<SpecializedComputePipelines<LightPipeline>>()
                 .init_resource::<FrameUniform>()
-                .add_system_to_stage(RenderStage::Prepare, prepare_light_pass_targets)
-                .add_system_to_stage(RenderStage::Prepare, prepare_frame_uniform)
-                .add_system_to_stage(RenderStage::Queue, queue_view_bind_groups)
-                .add_system_to_stage(RenderStage::Queue, queue_light_bind_groups)
-                .add_system_to_stage(RenderStage::Queue, queue_light_pipelines);
+                .add_system(prepare_light_pass_targets.in_set(RenderSet::Prepare))
+                .add_system(prepare_frame_uniform.in_set(RenderSet::Prepare))
+                .add_system(queue_view_bind_groups.in_set(RenderSet::Queue))
+                .add_system(queue_light_bind_groups.in_set(RenderSet::Queue))
+                .add_system(queue_light_pipelines.in_set(RenderSet::Queue));
         }
     }
 }
 
 // [0.8] refer MeshPipeline
+#[derive(Resource)]
 pub struct LightPipeline {
     pub view_layout: BindGroupLayout,
     pub deferred_layout: BindGroupLayout,
@@ -104,10 +106,7 @@ impl FromWorld for LightPipeline {
                     ty: BindingType::Texture {
                         multisampled: false,
                         sample_type: TextureSampleType::Depth,
-                        #[cfg(not(feature = "webgl"))]
                         view_dimension: TextureViewDimension::CubeArray,
-                        #[cfg(feature = "webgl")]
-                        view_dimension: TextureViewDimension::Cube,
                     },
                     count: None,
                 },
@@ -125,10 +124,7 @@ impl FromWorld for LightPipeline {
                     ty: BindingType::Texture {
                         multisampled: false,
                         sample_type: TextureSampleType::Depth,
-                        #[cfg(not(feature = "webgl"))]
                         view_dimension: TextureViewDimension::D2Array,
-                        #[cfg(feature = "webgl")]
-                        view_dimension: TextureViewDimension::D2,
                     },
                     count: None,
                 },
@@ -420,19 +416,30 @@ impl SpecializedComputePipeline for LightPipeline {
     type Key = LightPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> ComputePipelineDescriptor {
+        let mut shader_defs = Vec::new();
+        shader_defs.push(ShaderDefVal::Int(
+            "MAX_DIRECTIONAL_LIGHTS".to_string(),
+            MAX_DIRECTIONAL_LIGHTS as i32,
+        ));
+        shader_defs.push(ShaderDefVal::Int(
+            "MAX_CASCADES_PER_LIGHT".to_string(),
+            MAX_CASCADES_PER_LIGHT as i32,
+        ));
+
         ComputePipelineDescriptor {
             label: None,
-            layout: Some(vec![
+            layout: vec![
                 self.view_layout.clone(),
                 self.deferred_layout.clone(),
                 self.mesh_material_layout.clone(),
                 self.texture_layout.clone().unwrap(),
                 self.frame_layout.clone(),
                 self.render_layout.clone(),
-            ]),
+            ],
             shader: LIGHT_SHADER_HANDLE.typed::<Shader>(),
-            shader_defs: vec![],
+            shader_defs,
             entry_point: key.entry_point.into(),
+            push_constant_ranges: Vec::new(),
         }
     }
 }
@@ -491,6 +498,7 @@ fn prepare_light_pass_targets(
                         dimension: TextureDimension::D2,
                         format: texture_format,
                         usage: texture_usage,
+                        view_formats: &[],
                     },
                 );
                 GpuImage {
@@ -499,6 +507,7 @@ fn prepare_light_pass_targets(
                     texture_format,
                     sampler,
                     size,
+                    mip_level_count: 1,
                 }
             };
 
@@ -520,7 +529,7 @@ fn prepare_light_pass_targets(
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct FrameCounter(usize);
 
 #[derive(Debug, Default, Clone, Copy, ShaderType)]
@@ -529,7 +538,7 @@ pub struct GpuFrame {
     pub kernel: [Vec3; 25],
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct FrameUniform {
     pub buffer: UniformBuffer<GpuFrame>,
 }
@@ -569,6 +578,7 @@ fn prepare_frame_uniform(
 }
 
 #[allow(dead_code)]
+#[derive(Resource)]
 pub struct CachedLightPipelines {
     direct_lit: CachedComputePipelineId,
 }
@@ -590,6 +600,10 @@ fn queue_light_pipelines(
         pipelines.specialize(&mut pipeline_cache, &pipeline, key)
     });
 
+    for pipeline in pipeline_cache.pipelines() {
+        info!("queue pipeline_cache: {:?}", pipeline.state);
+    }
+
     commands.insert_resource(CachedLightPipelines { direct_lit })
 }
 
@@ -604,7 +618,7 @@ pub fn queue_view_bind_groups(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     pipeline: Res<LightPipeline>,
-    shadow_pipeline: Res<ShadowPipeline>,
+    shadow_samplers: Res<ShadowSamplers>,
     light_meta: Res<LightMeta>,
     global_light_meta: Res<GlobalLightMeta>,
     view_uniforms: Res<ViewUniforms>,
@@ -635,7 +649,7 @@ pub fn queue_view_bind_groups(
                     },
                     BindGroupEntry {
                         binding: 3,
-                        resource: BindingResource::Sampler(&shadow_pipeline.point_light_sampler),
+                        resource: BindingResource::Sampler(&shadow_samplers.point_light_sampler),
                     },
                     BindGroupEntry {
                         binding: 4,
@@ -646,7 +660,7 @@ pub fn queue_view_bind_groups(
                     BindGroupEntry {
                         binding: 5,
                         resource: BindingResource::Sampler(
-                            &shadow_pipeline.directional_light_sampler,
+                            &shadow_samplers.directional_light_sampler,
                         ),
                     },
                     BindGroupEntry {
@@ -911,7 +925,7 @@ impl Node for LightPassNode {
         let pipeline_cache = world.resource::<PipelineCache>();
 
         let mut pass = render_context
-            .command_encoder
+            .command_encoder()
             .begin_compute_pass(&ComputePassDescriptor::default());
 
         // bind_group should match Compute Descriptor

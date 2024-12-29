@@ -1,19 +1,24 @@
 use bevy::{
     prelude::*,
-    render::{Extract, RenderApp, RenderStage},
+    render::{Extract, RenderApp, RenderSet},
     transform::TransformSystem,
 };
 
 pub struct TransformPlugin;
 impl Plugin for TransformPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_to_stage(
-            CoreStage::PostUpdate,
-            previous_transform_system.before(TransformSystem::TransformPropagate),
+        app.add_system(
+            previous_transform_system
+                .in_base_set(CoreSet::PostUpdate)
+                .before(TransformSystem::TransformPropagate),
         );
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_system_to_stage(RenderStage::Extract, extract_previous_transform);
+            render_app.add_system(
+                extract_previous_transform
+                    .in_set(RenderSet::ExtractCommands)
+                    .in_schedule(ExtractSchedule),
+            );
         }
     }
 }

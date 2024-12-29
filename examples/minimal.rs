@@ -4,20 +4,20 @@ use std::f32::consts::PI;
 
 fn main() {
     App::new()
-        .insert_resource(WindowDescriptor {
-            width: 800.,
-            height: 600.,
+        .insert_resource(Msaa::Sample4)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Hikari".into(),
+                resolution: (800., 600.).into(),
+                ..default()
+            }),
             ..default()
-        })
-        .insert_resource(Msaa { samples: 4 })
-        .add_plugins(DefaultPlugins)
-        .add_plugin(PbrPlugin)
+        }))
+        // .add_plugin(PbrPlugin::default())
         .add_plugin(HikariPlugin::default())
         .add_startup_system(setup)
         .run();
 }
-
-pub struct RaycastSet;
 
 fn setup(
     mut commands: Commands,
@@ -26,7 +26,7 @@ fn setup(
     asset_server: Res<AssetServer>,
 ) {
     // Ground
-    commands.spawn_bundle(PbrBundle {
+    commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Cube::default())),
         material: materials.add(StandardMaterial {
             base_color: Color::rgb(0.3, 0.5, 0.3),
@@ -40,7 +40,7 @@ fn setup(
         },
         ..Default::default()
     });
-    commands.spawn_bundle(PbrBundle {
+    commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane::default())),
         material: materials.add(StandardMaterial {
             base_color: Color::GRAY,
@@ -57,7 +57,7 @@ fn setup(
     // .insert(RayCastMesh::<RaycastSet>::default());
 
     // Sphere
-    commands.spawn_bundle(PbrBundle {
+    commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::UVSphere {
             radius: 0.5,
             ..Default::default()
@@ -72,7 +72,7 @@ fn setup(
         ..Default::default()
     });
     // Model
-    commands.spawn_bundle(SceneBundle {
+    commands.spawn(SceneBundle {
         scene: asset_server.load("models/FlightHelmet/FlightHelmet.gltf#Scene0"),
         transform: Transform::from_scale(Vec3::splat(2.0)),
         ..default()
@@ -80,18 +80,9 @@ fn setup(
 
     // Only directional light is supported
     const HALF_SIZE: f32 = 5.0;
-    commands.spawn_bundle(DirectionalLightBundle {
+    commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: 100000.0,
-            shadow_projection: OrthographicProjection {
-                left: -HALF_SIZE,
-                right: HALF_SIZE,
-                bottom: -HALF_SIZE,
-                top: HALF_SIZE,
-                near: -10.0 * HALF_SIZE,
-                far: 10.0 * HALF_SIZE,
-                ..Default::default()
-            },
             shadows_enabled: true,
             ..Default::default()
         },
@@ -104,7 +95,7 @@ fn setup(
     });
 
     // Camera
-    commands.spawn_bundle(Camera3dBundle {
+    commands.spawn(Camera3dBundle {
         camera_render_graph: CameraRenderGraph::new(bevy_hikari::graph::NAME),
         transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..Default::default()

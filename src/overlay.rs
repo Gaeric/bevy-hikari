@@ -1,11 +1,8 @@
 use crate::{light::LightPassTarget, OVERLAY_SHADER_HANDLE, QUAD_HANDLE};
 use bevy::{
     core_pipeline::clear_color::ClearColorConfig,
-    ecs::system::{
-        lifetimeless::{Read, SQuery},
-        SystemParamItem,
-    },
-    pbr::{DrawMesh, MeshPipelineKey},
+    ecs::system::{lifetimeless::Read, SystemParamItem},
+    pbr::{DrawMesh, MeshPipelineKey, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS},
     prelude::{shape::Quad, *},
     render::{
         camera::ExtractedCamera,
@@ -14,14 +11,14 @@ use bevy::{
         render_graph::{Node, NodeRunError, RenderGraphContext, SlotInfo, SlotType},
         render_phase::{
             AddRenderCommand, CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions,
-            EntityPhaseItem, EntityRenderCommand, PhaseItem, RenderCommandResult, RenderPhase,
-            SetItemPipeline, TrackedRenderPass,
+            PhaseItem, RenderCommand, RenderCommandResult, RenderPhase, SetItemPipeline,
+            TrackedRenderPass,
         },
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
         texture::BevyDefault,
         view::{ExtractedView, ViewTarget},
-        Extract, RenderApp, RenderStage,
+        Extract, RenderApp, RenderSet,
     },
     utils::FloatOrd,
 };
@@ -37,9 +34,13 @@ impl Plugin for OverlayPlugin {
                 .init_resource::<OverlayPipeline>()
                 .init_resource::<SpecializedMeshPipelines<OverlayPipeline>>()
                 .add_render_command::<Overlay, DrawOverlay>()
-                .add_system_to_stage(RenderStage::Extract, extract_overlay_camera_phases)
-                .add_system_to_stage(RenderStage::Queue, queue_overlay_bind_groups)
-                .add_system_to_stage(RenderStage::Queue, queue_overlay_mesh);
+                .add_system(
+                    extract_overlay_camera_phases
+                        .in_set(RenderSet::ExtractCommands)
+                        .in_schedule(ExtractSchedule),
+                )
+                .add_system(queue_overlay_bind_groups.in_set(RenderSet::Queue))
+                .add_system(queue_overlay_mesh.in_set(RenderSet::Queue));
         }
     }
 }
@@ -49,6 +50,7 @@ fn setup(mut meshes: ResMut<Assets<Mesh>>) {
     meshes.set_untracked(QUAD_HANDLE, mesh);
 }
 
+#[derive(Resource)]
 pub struct OverlayPipeline {
     pub overlay_layout: BindGroupLayout,
 }
@@ -95,18 +97,29 @@ impl SpecializedMeshPipeline for OverlayPipeline {
         let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
         let bind_group_layout = vec![self.overlay_layout.clone()];
 
+        let mut shader_defs = Vec::new();
+        shader_defs.push(ShaderDefVal::Int(
+            "MAX_DIRECTIONAL_LIGHTS".to_string(),
+            MAX_DIRECTIONAL_LIGHTS as i32,
+        ));
+        shader_defs.push(ShaderDefVal::Int(
+            "MAX_CASCADES_PER_LIGHT".to_string(),
+            MAX_CASCADES_PER_LIGHT as i32,
+        ));
+
+
         Ok(RenderPipelineDescriptor {
             label: None,
-            layout: Some(bind_group_layout),
+            layout: bind_group_layout,
             vertex: VertexState {
                 shader: OVERLAY_SHADER_HANDLE.typed::<Shader>(),
-                shader_defs: vec![],
+                shader_defs: shader_defs.clone(),
                 entry_point: "vertex".into(),
                 buffers: vec![vertex_buffer_layout],
             },
             fragment: Some(FragmentState {
                 shader: OVERLAY_SHADER_HANDLE.typed::<Shader>(),
-                shader_defs: vec![],
+                shader_defs: shader_defs.clone(),
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
                     format: TextureFormat::bevy_default(),
@@ -114,6 +127,7 @@ impl SpecializedMeshPipeline for OverlayPipeline {
                     write_mask: ColorWrites::ALL,
                 })],
             }),
+            push_constant_ranges: Vec::new(),
             primitive: PrimitiveState {
                 topology: key.primitive_topology(),
                 strip_index_format: None,
@@ -147,7 +161,7 @@ fn extract_overlay_camera_phases(
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Resource)]
 pub struct OverlayBindGroup(pub BindGroup);
 
 fn queue_overlay_bind_groups(
@@ -190,7 +204,7 @@ fn queue_overlay_mesh(
     for mut overlay_phase in &mut views {
         let mesh_handle = QUAD_HANDLE.typed::<Mesh>();
         if let Some(mesh) = render_meshes.get(&mesh_handle) {
-            let key = MeshPipelineKey::from_msaa_samples(msaa.samples)
+            let key = MeshPipelineKey::from_msaa_samples(msaa.samples())
                 | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
             let pipeline_id =
                 pipelines.specialize(&mut pipeline_cache, &overlay_pipeline, key, &mesh.layout);
@@ -201,7 +215,7 @@ fn queue_overlay_mesh(
                     return;
                 }
             };
-            let entity = commands.spawn().insert(mesh_handle.clone()).id();
+            let entity = commands.spawn_empty().insert(mesh_handle.clone()).id();
             overlay_phase.add(Overlay {
                 distance: 0.0,
                 entity,
@@ -232,9 +246,7 @@ impl PhaseItem for Overlay {
     fn draw_function(&self) -> DrawFunctionId {
         self.draw_function
     }
-}
 
-impl EntityPhaseItem for Overlay {
     #[inline]
     fn entity(&self) -> Entity {
         self.entity
@@ -252,18 +264,19 @@ impl CachedRenderPipelinePhaseItem for Overlay {
 type DrawOverlay = (SetItemPipeline, SetOverlayBindGroup<0>, DrawMesh);
 
 pub struct SetOverlayBindGroup<const I: usize>;
-impl<const I: usize> EntityRenderCommand for SetOverlayBindGroup<I> {
-    type Param = SQuery<Read<OverlayBindGroup>>;
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOverlayBindGroup<I> {
+    type Param = ();
+    type ViewWorldQuery = ();
+    type ItemWorldQuery = Read<OverlayBindGroup>;
 
     fn render<'w>(
-        view: Entity,
-        _item: Entity,
-        query: SystemParamItem<'w, '_, Self::Param>,
+        item: &P,
+        view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
+        bind_group: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
+        param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let bind_group = query.get_inner(view).unwrap();
         pass.set_bind_group(I, &bind_group.0, &[]);
-
         RenderCommandResult::Success
     }
 }
@@ -332,20 +345,11 @@ impl Node for OverlayPassNode {
                 depth_stencil_attachment: None,
             };
 
-            let draw_functions = world.resource::<DrawFunctions<Overlay>>();
-
-            let render_pass = render_context
-                .command_encoder
-                .begin_render_pass(&pass_descriptor);
-            let mut draw_functions = draw_functions.write();
-            let mut tracked_pass = TrackedRenderPass::new(render_pass);
+            let mut render_pass = render_context.begin_tracked_render_pass(pass_descriptor);
             if let Some(viewport) = camera.viewport.as_ref() {
-                tracked_pass.set_camera_viewport(viewport);
+                render_pass.set_camera_viewport(viewport);
             }
-            for item in &overlay_phase.items {
-                let draw_function = draw_functions.get_mut(item.draw_function).unwrap();
-                draw_function.draw(world, &mut tracked_pass, entity, item);
-            }
+            overlay_phase.render(&mut render_pass, world, entity);
         }
 
         Ok(())

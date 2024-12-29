@@ -6,7 +6,7 @@ use bevy::{
     render::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        Extract, RenderApp, RenderStage,
+        Extract, RenderApp, RenderSet,
     },
     utils::{HashMap, HashSet},
 };
@@ -20,11 +20,15 @@ impl Plugin for MeshPlugin {
                 .init_resource::<GpuMeshes>()
                 .init_resource::<MeshRenderAssets>()
                 .init_resource::<MeshAssetState>()
-                .add_system_to_stage(RenderStage::Extract, extract_mesh_assets)
-                .add_system_to_stage(
-                    RenderStage::Prepare,
+                .add_system(
+                    extract_mesh_assets
+                        .in_set(RenderSet::ExtractCommands)
+                        .in_schedule(ExtractSchedule),
+                )
+                .add_system(
                     prepare_mesh_assets
-                        .label(MeshMaterialSystems::PrepareAssets)
+                        .in_set(RenderSet::Prepare)
+                        .in_set(MeshMaterialSystems::PrepareAssets)
                         .after(MeshMaterialSystems::PrePrepareAssets),
                 );
         }
@@ -32,7 +36,7 @@ impl Plugin for MeshPlugin {
 }
 
 /// Acceleration structures on GPU.
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct MeshRenderAssets {
     pub vertex_buffer: StorageBuffer<GpuVertexBuffer>,
     pub primitive_buffer: StorageBuffer<GpuPrimitiveBuffer>,
@@ -54,7 +58,7 @@ impl MeshRenderAssets {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Resource)]
 pub enum MeshAssetState {
     /// No updates for all mesh assets.
     #[default]
@@ -66,10 +70,10 @@ pub enum MeshAssetState {
 }
 
 /// Holds all GPU representatives of mesh assets.
-#[derive(Default, Deref, DerefMut)]
+#[derive(Default, Deref, DerefMut, Resource)]
 pub struct GpuMeshes(HashMap<Handle<Mesh>, (GpuMesh, GpuMeshSlice)>);
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct ExtractedMeshes {
     extracted: Vec<(Handle<Mesh>, Mesh)>,
     removed: Vec<Handle<Mesh>>,

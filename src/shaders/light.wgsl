@@ -4,6 +4,7 @@
 
 #import bevy_hikari::mesh_material_bindings
 #import bevy_hikari::deferred_bindings
+#import bevy_hikari::overlay
 
 @group(3) @binding(0)
 var textures: binding_array<texture_2d<f32>>;
@@ -43,17 +44,17 @@ var previous_reservoir_textures: binding_array<texture_2d<f32>>;
 @group(5) @binding(9)
 var previous_reservoir_samplers: binding_array<sampler>;
 
-let F32_EPSILON: f32 = 1.1920929E-7;
-let F32_MAX: f32 = 3.402823466E+38;
-let U32_MAX: u32 = 4294967295u;
+const F32_EPSILON: f32 = 1.1920929E-7;
+const F32_MAX: f32 = 3.402823466E+38;
+const U32_MAX: u32 = 4294967295u;
 
-let DISTANCE_MAX: f32 = 65535.0;
-let VALIDATION_INTERVAL: u32 = 16u;
-let NOISE_TEXTURE_COUNT: u32 = 64u;
-let GOLDEN_RATIO: f32 = 1.618033989;
-let SECOND_BOUNCE_CHANCE: f32 = 1.0;
+const DISTANCE_MAX: f32 = 65535.0;
+const VALIDATION_INTERVAL: u32 = 16u;
+const NOISE_TEXTURE_COUNT: u32 = 64u;
+const GOLDEN_RATIO: f32 = 1.618033989;
+const SECOND_BOUNCE_CHANCE: f32 = 1.0;
 
-let SOLAR_ANGLE: f32 = 0.523598776;
+const SOLAR_ANGLE: f32 = 0.523598776;
 
 fn hash(value: u32) -> u32 {
     var state = value;
@@ -485,7 +486,8 @@ fn virtual_light(
 
     let diffuse = diffuse_color * Fd_Burley(roughness, NdotV, NoL, LoH);
     let specular_intensity = 1.0;
-    let specular_light = specular(F0, roughness, half_vector, NdotV, NoL, NoH, LoH, specular_intensity);
+    let f_ab = F_AB(roughness, NdotV);
+    let specular_light = specular(F0, roughness, half_vector, NdotV, NoL, NoH, LoH, specular_intensity, f_ab);
 
     return (specular_light + diffuse) * light.radiance * NoL;
 }
@@ -523,8 +525,8 @@ fn shading(
         if (dot(light.direction_to_light, ray.direction) > cos(SOLAR_ANGLE)) {
             out_radiance = virtual_light(v, surface.roughness, NdotV, N, V, R, F0, diffuse_color);
         } else {
-            let diffuse_ambient = EnvBRDFApprox(diffuse_color, 1.0, NdotV);
-            let specular_ambient = EnvBRDFApprox(F0, surface.roughness, NdotV);
+            let diffuse_ambient = EnvBRDFApprox(diffuse_color, F_AB(1.0, NdotV));
+            let specular_ambient = EnvBRDFApprox(F0, F_AB(surface.roughness, NdotV));
             out_radiance = surface.occlusion * (diffuse_ambient + specular_ambient) * lights.ambient_color.rgb;
         }
     } else {

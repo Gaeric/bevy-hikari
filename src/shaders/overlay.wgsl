@@ -1,5 +1,7 @@
+#define_import_path bevy_hikari::overlay
+
 @group(0) @binding(0)
-var render_texture: texture_2d<f32>;
+var render_texture_2d: texture_2d<f32>;
 @group(0) @binding(1)
 var render_sampler: sampler;
 
@@ -42,6 +44,6 @@ fn vertex(@location(0) position: vec3<f32>) -> VertexOutput {
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     var uv = 0.5 * in.position.xy + 0.5;
     uv.y = 1.0 - uv.y;
-    let color = textureSample(render_texture, render_sampler, uv);
+    let color = textureSample(render_texture_2d, render_sampler, uv);
     return tone_mapping(color);
 }

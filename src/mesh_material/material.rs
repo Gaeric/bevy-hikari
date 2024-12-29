@@ -8,7 +8,7 @@ use bevy::{
     render::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        Extract, RenderApp, RenderStage,
+        Extract, RenderApp, RenderSet,
     },
     utils::{HashMap, HashSet},
 };
@@ -25,10 +25,10 @@ impl Plugin for MaterialPlugin {
                 .init_resource::<MaterialRenderAssets>()
                 .init_resource::<StandardMaterials>()
                 .init_resource::<GpuStandardMaterials>()
-                .add_system_to_stage(
-                    RenderStage::Prepare,
+                .add_system(
                     prepare_material_assets
-                        .label(MeshMaterialSystems::PrepareAssets)
+                        .in_set(RenderSet::Prepare)
+                        .in_set(MeshMaterialSystems::PrepareAssets)
                         .after(MeshMaterialSystems::PrePrepareAssets),
                 );
         }
@@ -41,31 +41,35 @@ impl<M: IntoStandardMaterial> Plugin for GenericMaterialPlugin<M> {
     fn build(&self, app: &mut App) {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
-                .add_system_to_stage(RenderStage::Extract, extract_material_assets::<M>)
-                .add_system_to_stage(
-                    RenderStage::Prepare,
+                .add_system(
+                    extract_material_assets::<M>
+                        .in_set(RenderSet::ExtractCommands)
+                        .in_schedule(ExtractSchedule),
+                )
+                .add_system(
                     prepare_generic_material_assets::<M>
-                        .label(MeshMaterialSystems::PrePrepareAssets),
+                        .in_set(RenderSet::Prepare)
+                        .in_set(MeshMaterialSystems::PrePrepareAssets),
                 );
         }
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct MaterialRenderAssets {
     pub buffer: StorageBuffer<GpuStandardMaterialBuffer>,
     pub textures: BTreeSet<Handle<Image>>,
 }
 
-#[derive(Default, Deref, DerefMut)]
+#[derive(Default, Deref, DerefMut, Resource)]
 pub struct StandardMaterials(BTreeMap<HandleId, StandardMaterial>);
 
-#[derive(Default, Deref, DerefMut)]
+#[derive(Default, Deref, DerefMut, Resource)]
 pub struct GpuStandardMaterials(
     HashMap<HandleUntyped, (GpuStandardMaterial, GpuStandardMaterialOffset)>,
 );
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct ExtractedMaterials<M: IntoStandardMaterial> {
     extracted: Vec<(Handle<M>, M)>,
     removed: Vec<Handle<M>>,
@@ -106,13 +110,13 @@ fn prepare_generic_material_assets<M: IntoStandardMaterial>(
     render_assets: ResMut<MaterialRenderAssets>,
 ) {
     for handle in extracted_assets.removed.drain(..) {
-        materials.remove(&handle.id);
+        materials.remove(&handle.id());
     }
 
     let render_assets = render_assets.into_inner();
     for (handle, material) in extracted_assets.extracted.drain(..) {
         let material = material.into_standard_material(render_assets);
-        materials.insert(handle.id, material);
+        materials.insert(handle.id(), material);
     }
 }
 

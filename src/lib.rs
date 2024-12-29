@@ -4,7 +4,9 @@ use bevy::{
     prelude::*,
     reflect::TypeUuid,
     render::{
-        extract_resource::ExtractResource, render_graph::{RenderGraph, SlotInfo, SlotType}, RenderApp
+        extract_resource::ExtractResource,
+        render_graph::{RenderGraph, SlotInfo, SlotType},
+        RenderApp,
     },
 };
 use light::{LightPassNode, LightPlugin};
@@ -74,9 +76,9 @@ impl Default for HikariPlugin {
     }
 }
 
-// [0.8] refer from compute_shader_game_of_life GameOfLifeImage 
-// 
-#[derive(Clone, Deref, DerefMut, ExtractResource)]
+// [0.8] refer from compute_shader_game_of_life GameOfLifeImage
+//
+#[derive(Clone, Deref, DerefMut, Resource, ExtractResource)]
 pub struct NoiseTexture(pub Vec<Handle<Image>>);
 
 // [0.8] refer PbrPlugin
@@ -154,37 +156,27 @@ impl Plugin for HikariPlugin {
                 graph::input::VIEW_ENTITY,
                 SlotType::Entity,
             )]);
-            hikari_graph
-                .add_slot_edge(
-                    input_node_id,
-                    graph::input::VIEW_ENTITY,
-                    graph::node::PREPASS,
-                    PrepassNode::IN_VIEW,
-                )
-                .unwrap();
-            hikari_graph
-                .add_slot_edge(
-                    input_node_id,
-                    graph::input::VIEW_ENTITY,
-                    graph::node::LIGHT_DIRECT_PASS,
-                    LightPassNode::IN_VIEW,
-                )
-                .unwrap();
-            hikari_graph
-                .add_node_edge(graph::node::PREPASS, graph::node::LIGHT_DIRECT_PASS)
-                .unwrap();
+            hikari_graph.add_slot_edge(
+                input_node_id,
+                graph::input::VIEW_ENTITY,
+                graph::node::PREPASS,
+                PrepassNode::IN_VIEW,
+            );
+            hikari_graph.add_slot_edge(
+                input_node_id,
+                graph::input::VIEW_ENTITY,
+                graph::node::LIGHT_DIRECT_PASS,
+                LightPassNode::IN_VIEW,
+            );
+            hikari_graph.add_node_edge(graph::node::PREPASS, graph::node::LIGHT_DIRECT_PASS);
             // refer MainPass3dNode
-            hikari_graph
-                .add_slot_edge(
-                    input_node_id,
-                    graph::input::VIEW_ENTITY,
-                    graph::node::OVERLAY_PASS,
-                    MainPass3dNode::IN_VIEW,
-                )
-                .unwrap();
-            hikari_graph
-                .add_node_edge(graph::node::LIGHT_DIRECT_PASS, graph::node::OVERLAY_PASS)
-                .unwrap();
+            hikari_graph.add_slot_edge(
+                input_node_id,
+                graph::input::VIEW_ENTITY,
+                graph::node::OVERLAY_PASS,
+                MainPass3dNode::IN_VIEW,
+            );
+            hikari_graph.add_node_edge(graph::node::LIGHT_DIRECT_PASS, graph::node::OVERLAY_PASS);
             graph.add_sub_graph(graph::NAME, hikari_graph);
         }
     }

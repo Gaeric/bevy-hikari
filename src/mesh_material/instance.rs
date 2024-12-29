@@ -16,7 +16,7 @@ use bevy::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
         view::VisibilitySystems,
-        Extract, RenderApp, RenderStage,
+        Extract, RenderApp, RenderSet,
     },
     transform::TransformSystem,
 };
@@ -33,11 +33,15 @@ impl Plugin for InstancePlugin {
             render_app
                 .init_resource::<GpuInstances>()
                 .init_resource::<InstanceRenderAssets>()
-                .add_system_to_stage(RenderStage::Extract, extract_mesh_transforms)
-                .add_system_to_stage(
-                    RenderStage::Prepare,
+                .add_system(
+                    extract_mesh_transforms
+                        .in_set(RenderSet::ExtractCommands)
+                        .in_schedule(ExtractSchedule),
+                )
+                .add_system(
                     prepare_instances
-                        .label(MeshMaterialSystems::PostPrepareInstances)
+                        .in_set(RenderSet::Prepare)
+                        .in_set(MeshMaterialSystems::PostPrepareInstances)
                         .after(MeshMaterialSystems::PrepareInstances),
                 );
         }
@@ -48,27 +52,31 @@ impl Plugin for InstancePlugin {
 pub struct GenericInstancePlugin<M: IntoStandardMaterial>(PhantomData<M>);
 impl<M: IntoStandardMaterial> Plugin for GenericInstancePlugin<M> {
     fn build(&self, app: &mut App) {
-        app.add_event::<InstanceEvent<M>>().add_system_to_stage(
-            CoreStage::PostUpdate,
+        app.add_event::<InstanceEvent<M>>().add_system(
             instance_event_system::<M>
+                .in_base_set(CoreSet::PostUpdate)
                 .after(TransformSystem::TransformPropagate)
                 .after(VisibilitySystems::CalculateBounds),
         );
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
-                .add_system_to_stage(RenderStage::Extract, extract_instances::<M>)
-                .add_system_to_stage(
-                    RenderStage::Prepare,
+                .add_system(
+                    extract_instances::<M>
+                        .in_set(RenderSet::ExtractCommands)
+                        .in_schedule(ExtractSchedule),
+                )
+                .add_system(
                     prepare_generic_instances::<M>
-                        .label(MeshMaterialSystems::PrepareInstances)
+                        .in_set(RenderSet::Prepare)
+                        .in_set(MeshMaterialSystems::PrepareInstances)
                         .after(MeshMaterialSystems::PrepareAssets),
                 );
         }
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct InstanceRenderAssets {
     pub instance_buffer: StorageBuffer<GpuInstanceBuffer>,
     pub node_buffer: StorageBuffer<GpuNodeBuffer>,
@@ -95,6 +103,8 @@ pub struct PreviousMeshUniform {
     pub inverse_transpose_model: Mat4,
 }
 
+// this function specifically prepares mesh transform data for the next frame's rendering
+// so maybe we can transfer motion vection code for bevy 0.15
 #[allow(clippy::type_complexity)]
 fn extract_mesh_transforms(
     mut commands: Commands,
@@ -110,7 +120,7 @@ fn extract_mesh_transforms(
     }
 }
 
-#[derive(Default, Deref, DerefMut)]
+#[derive(Default, Deref, DerefMut, Resource)]
 pub struct GpuInstances(BTreeMap<Entity, GpuInstance>);
 
 pub enum InstanceEvent<M: IntoStandardMaterial> {
@@ -122,7 +132,7 @@ pub enum InstanceEvent<M: IntoStandardMaterial> {
 #[allow(clippy::type_complexity)]
 fn instance_event_system<M: IntoStandardMaterial>(
     mut events: EventWriter<InstanceEvent<M>>,
-    removed: RemovedComponents<Handle<Mesh>>,
+    mut removed: RemovedComponents<Handle<Mesh>>,
     mut set: ParamSet<(
         Query<(Entity, &Handle<Mesh>, &Handle<M>), Or<(Added<Handle<Mesh>>, Added<Handle<M>>)>>,
         Query<
@@ -155,6 +165,7 @@ fn instance_event_system<M: IntoStandardMaterial>(
 }
 
 #[allow(clippy::type_complexity)]
+#[derive(Resource)]
 pub struct ExtractedInstances<M: IntoStandardMaterial> {
     extracted: Vec<(Entity, Aabb, GlobalTransform, Handle<Mesh>, Handle<M>)>,
     removed: Vec<Entity>,
@@ -204,7 +215,7 @@ fn prepare_generic_instances<M: IntoStandardMaterial>(
         instances.remove(&removed);
     }
     for (entity, aabb, transform, mesh, material) in extracted_instances.extracted.drain(..) {
-        let material = HandleUntyped::weak(material.id);
+        let material = HandleUntyped::weak(material.id());
         let transform = transform.compute_matrix();
         let center = transform.transform_point3a(aabb.center);
         let vertices: Vec<_> = (0..8i32)

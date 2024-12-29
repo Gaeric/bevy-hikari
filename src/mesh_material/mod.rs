@@ -10,10 +10,10 @@ use bevy::{
     render::{
         mesh::VertexAttributeValues,
         render_asset::RenderAssets,
-        render_phase::{EntityRenderCommand, RenderCommandResult, TrackedRenderPass},
+        render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::*,
         renderer::RenderDevice,
-        RenderApp, RenderStage,
+        RenderApp, RenderSet,
     },
 };
 use bvh::{
@@ -46,11 +46,12 @@ impl Plugin for MeshMaterialPlugin {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<MeshMaterialBindGroupLayout>()
-                .add_system_to_stage(
-                    RenderStage::Prepare,
-                    prepare_texture_bind_group_layout.after(MeshMaterialSystems::PrepareAssets),
+                .add_system(
+                    prepare_texture_bind_group_layout
+                        .in_set(RenderSet::Prepare)
+                        .after(MeshMaterialSystems::PrepareAssets),
                 )
-                .add_system_to_stage(RenderStage::Queue, queue_mesh_material_bind_group);
+                .add_system(queue_mesh_material_bind_group.in_set(RenderSet::Queue));
         }
     }
 }
@@ -313,7 +314,7 @@ impl IntoStandardMaterial for StandardMaterial {
     }
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub enum MeshMaterialSystems {
     PrePrepareAssets,
     PrepareAssets,
@@ -321,6 +322,7 @@ pub enum MeshMaterialSystems {
     PostPrepareInstances,
 }
 
+#[derive(Resource, Debug)]
 pub struct MeshMaterialBindGroupLayout(pub BindGroupLayout);
 impl FromWorld for MeshMaterialBindGroupLayout {
     fn from_world(world: &mut World) -> Self {
@@ -401,6 +403,7 @@ impl FromWorld for MeshMaterialBindGroupLayout {
     }
 }
 
+#[derive(Resource, Debug)]
 pub struct TextureBindGroupLayout {
     pub layout: BindGroupLayout,
     pub count: usize,
@@ -438,6 +441,7 @@ fn prepare_texture_bind_group_layout(
     commands.insert_resource(TextureBindGroupLayout { layout, count });
 }
 
+#[derive(Resource)]
 pub struct MeshMaterialBindGroup {
     pub mesh_material: BindGroup,
     pub texture: BindGroup,
@@ -534,17 +538,19 @@ fn queue_mesh_material_bind_group(
 }
 
 pub struct SetMeshMaterialBindGroup<const I: usize>;
-impl<const I: usize> EntityRenderCommand for SetMeshMaterialBindGroup<I> {
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetMeshMaterialBindGroup<I> {
     type Param = SRes<MeshMaterialBindGroup>;
+    type ViewWorldQuery = ();
+    type ItemWorldQuery = ();
 
     fn render<'w>(
-        _view: Entity,
-        _item: Entity,
+        item: &P,
+        view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
+        entity: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         pass.set_bind_group(I, &bind_group.into_inner().mesh_material, &[]);
-
         RenderCommandResult::Success
     }
 }

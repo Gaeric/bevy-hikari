@@ -5,7 +5,7 @@ use bevy::{
         render_resource::{DynamicUniformBuffer, ShaderType},
         renderer::{RenderDevice, RenderQueue},
         view::ExtractedView,
-        RenderApp, RenderStage,
+        RenderApp, RenderSet,
     },
 };
 
@@ -15,7 +15,7 @@ impl Plugin for ViewPlugin {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<PreviousViewUniforms>()
-                .add_system_to_stage(RenderStage::Prepare, prepare_view_uniforms);
+                .add_system(prepare_view_uniforms.in_set(RenderSet::Prepare));
         }
     }
 }
@@ -28,7 +28,7 @@ pub struct PreviousViewUniform {
 }
 
 // [0.8] refer ViewUniforms
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct PreviousViewUniforms {
     pub uniforms: DynamicUniformBuffer<PreviousViewUniform>,
 }
