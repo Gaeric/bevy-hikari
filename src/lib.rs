@@ -1,13 +1,15 @@
+use std::any::TypeId;
+
 use bevy::{
-    asset::load_internal_asset,
+    asset::{load_internal_asset, UntypedAssetId},
     core_pipeline::upscaling::UpscalingNode,
     prelude::*,
-    reflect::TypeUuid,
     render::{
         extract_resource::ExtractResource,
         render_graph::{RenderGraphApp, ViewNodeRunner},
         RenderApp,
     },
+    utils::Uuid,
 };
 
 use light::{LightPassNode, LightPlugin};
@@ -42,20 +44,17 @@ pub const WORKGROUP_SIZE: u32 = 8;
 pub const NOISE_TEXTURE_COUNT: usize = 64;
 
 // refer mesh.rs
-pub const MESH_MATERIAL_TYPES_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 15819591594687298858);
-pub const MESH_MATERIAL_BINDINGS_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 5025976374517268);
-pub const DEFERRED_BINDINGS_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 14467895678105108252);
-pub const PREPASS_SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 4693612430004931427);
-pub const LIGHT_SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 9657319286592943583);
-pub const OVERLAY_SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 10969344919103020615);
-pub const QUAD_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Mesh::TYPE_UUID, 4740146776519512271);
+pub const MESH_MATERIAL_TYPES_HANDLE: Handle<Shader> = Handle::weak_from_u128(15819591594687298858);
+pub const MESH_MATERIAL_BINDINGS_HANDLE: Handle<Shader> = Handle::weak_from_u128(5025976374517268);
+pub const DEFERRED_BINDINGS_HANDLE: Handle<Shader> = Handle::weak_from_u128(14467895678105108252);
+pub const PREPASS_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(4693612430004931427);
+pub const LIGHT_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(9657319286592943583);
+pub const OVERLAY_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(10969344919103020615);
+
+pub const QUAD_HANDLE: UntypedHandle = UntypedHandle::Weak(UntypedAssetId::Uuid {
+    type_id: TypeId::of::<Mesh>(),
+    uuid: Uuid::from_u128(4740146776519512271),
+});
 
 pub struct HikariPlugin {
     noise_folder: String,

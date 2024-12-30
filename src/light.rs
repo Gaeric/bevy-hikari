@@ -44,10 +44,10 @@ impl Plugin for LightPlugin {
                     Render,
                     (
                         prepare_light_pass_targets.in_set(RenderSet::Prepare),
-                        (prepare_frame_uniform.in_set(RenderSet::Prepare)),
-                        queue_view_bind_groups.in_set(RenderSet::Queue),
-                        queue_light_bind_groups.in_set(RenderSet::Queue),
-                        queue_light_pipelines.in_set(RenderSet::Queue),
+                        prepare_frame_uniform.in_set(RenderSet::Prepare),
+                        queue_light_pipelines.in_set(RenderSet::Prepare),
+                        queue_view_bind_groups.in_set(RenderSet::PrepareBindGroups),
+                        queue_light_bind_groups.in_set(RenderSet::PrepareBindGroups),
                     ),
                 );
         }
@@ -435,7 +435,7 @@ impl SpecializedComputePipeline for LightPipeline {
                 self.frame_layout.clone(),
                 self.render_layout.clone(),
             ],
-            shader: LIGHT_SHADER_HANDLE.typed::<Shader>(),
+            shader: LIGHT_SHADER_HANDLE,
             shader_defs,
             entry_point: key.entry_point.into(),
             push_constant_ranges: Vec::new(),
@@ -629,55 +629,24 @@ pub fn queue_view_bind_groups(
         light_meta.view_gpu_lights.binding(),
         global_light_meta.gpu_point_lights.binding(),
     ) {
-        for (entity, view_shadow_bindings, view_cluster_bindings) in &views {
-            let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: view_binding.clone(),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: light_binding.clone(),
-                    },
-                    BindGroupEntry {
-                        binding: 2,
-                        resource: BindingResource::TextureView(
-                            &view_shadow_bindings.point_light_depth_texture_view,
-                        ),
-                    },
-                    BindGroupEntry {
-                        binding: 3,
-                        resource: BindingResource::Sampler(&shadow_samplers.point_light_sampler),
-                    },
-                    BindGroupEntry {
-                        binding: 4,
-                        resource: BindingResource::TextureView(
-                            &view_shadow_bindings.directional_light_depth_texture_view,
-                        ),
-                    },
-                    BindGroupEntry {
-                        binding: 5,
-                        resource: BindingResource::Sampler(
-                            &shadow_samplers.directional_light_sampler,
-                        ),
-                    },
-                    BindGroupEntry {
-                        binding: 6,
-                        resource: point_light_binding.clone(),
-                    },
-                    BindGroupEntry {
-                        binding: 7,
-                        resource: view_cluster_bindings.light_index_lists_binding().unwrap(),
-                    },
-                    BindGroupEntry {
-                        binding: 8,
-                        resource: view_cluster_bindings.offsets_and_counts_binding().unwrap(),
-                    },
-                ],
-                label: None,
-                layout: &pipeline.view_layout,
-            });
+        for (entity, shadow_bindings, cluster_bindings) in &views {
+            let entries = DynamicBindGroupEntries::new_with_indices((
+                (0, view_binding.clone()),
+                (1, light_binding.clone()),
+                (2, &shadow_bindings.point_light_depth_texture_view),
+                (3, &shadow_samplers.point_light_sampler),
+                (4, &shadow_bindings.directional_light_depth_texture_view),
+                (5, &shadow_samplers.directional_light_sampler),
+                (6, point_light_binding.clone()),
+                (7, cluster_bindings.light_index_lists_binding().unwrap()),
+                (8, cluster_bindings.offsets_and_counts_binding().unwrap()),
+            ));
+
+            let bind_group = render_device.create_bind_group(
+                "light view_bind_group",
+                &pipeline.view_layout,
+                &entries,
+            );
 
             commands.entity(entity).insert(ViewBindGroup(bind_group));
         }
@@ -726,10 +695,10 @@ fn queue_light_bind_groups(
 
     for (entity, prepass, light_pass) in &query {
         if let Some(frame_binding) = frame_uniform.buffer.binding() {
-            let deferred = render_device.create_bind_group(&BindGroupDescriptor {
-                label: None,
-                layout: &pipeline.deferred_layout,
-                entries: &[
+            let deferred = render_device.create_bind_group(
+                None,
+                &pipeline.deferred_layout,
+                &[
                     BindGroupEntry {
                         binding: 0,
                         resource: BindingResource::TextureView(&prepass.position.texture_view),
@@ -761,12 +730,12 @@ fn queue_light_bind_groups(
                         ),
                     },
                 ],
-            });
+            );
 
-            let frame = render_device.create_bind_group(&BindGroupDescriptor {
-                label: None,
-                layout: &pipeline.frame_layout,
-                entries: &[
+            let frame = render_device.create_bind_group(
+                None,
+                &pipeline.frame_layout,
+                &[
                     BindGroupEntry {
                         binding: 0,
                         resource: frame_binding,
@@ -780,15 +749,15 @@ fn queue_light_bind_groups(
                         resource: BindingResource::Sampler(&noise_sampler),
                     },
                 ],
-            });
+            );
 
             let current_id = counter.0 % 2;
             let current_reservoir = &light_pass.reservoir[current_id];
             let previous_reservoir = &light_pass.reservoir[1 - current_id];
-            let render = render_device.create_bind_group(&BindGroupDescriptor {
-                label: None,
-                layout: &pipeline.render_layout,
-                entries: &[
+            let render = render_device.create_bind_group(
+                None,
+                &pipeline.render_layout,
+                &[
                     BindGroupEntry {
                         binding: 0,
                         resource: BindingResource::TextureView(&light_pass.render.texture_view),
@@ -860,7 +829,7 @@ fn queue_light_bind_groups(
                         ]),
                     },
                 ],
-            });
+            );
 
             commands.entity(entity).insert(LightBindGroup {
                 deferred,

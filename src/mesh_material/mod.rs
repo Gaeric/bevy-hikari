@@ -483,10 +483,10 @@ fn queue_mesh_material_bind_group(
         instances.node_buffer.binding(),
         materials.buffer.binding(),
     ) {
-        let mesh_material = render_device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &mesh_material_layout.0,
-            entries: &[
+        let mesh_material = render_device.create_bind_group(
+            None,
+            &mesh_material_layout.0,
+            &[
                 BindGroupEntry {
                     binding: 0,
                     resource: vertex_binding,
@@ -512,7 +512,7 @@ fn queue_mesh_material_bind_group(
                     resource: material_binding,
                 },
             ],
-        });
+        );
 
         let images = materials.textures.iter().map(|handle| {
             images
@@ -522,10 +522,10 @@ fn queue_mesh_material_bind_group(
         let textures: Vec<_> = images.clone().map(|image| &*image.texture_view).collect();
         let samplers: Vec<_> = images.map(|image| &*image.sampler).collect();
 
-        let texture = render_device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &texture_layout.layout,
-            entries: &[
+        let texture = render_device.create_bind_group(
+            None,
+            &texture_layout.layout,
+            &[
                 BindGroupEntry {
                     binding: 0,
                     resource: BindingResource::TextureViewArray(textures.as_slice()),
@@ -535,7 +535,7 @@ fn queue_mesh_material_bind_group(
                     resource: BindingResource::SamplerArray(samplers.as_slice()),
                 },
             ],
-        });
+        );
 
         commands.insert_resource(MeshMaterialBindGroup {
             mesh_material,

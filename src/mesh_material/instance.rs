@@ -146,7 +146,7 @@ fn instance_event_system<M: IntoStandardMaterial>(
         >,
     )>,
 ) {
-    for entity in removed.iter() {
+    for entity in removed.read() {
         events.send(InstanceEvent::Removed(entity));
     }
     for (entity, mesh, material) in &set.p0() {
@@ -180,7 +180,7 @@ fn extract_instances<M: IntoStandardMaterial>(
     let mut extracted = vec![];
     let mut removed = vec![];
 
-    for event in events.iter() {
+    for event in events.read() {
         match event {
             InstanceEvent::Created(entity, mesh, material)
             | InstanceEvent::Modified(entity, mesh, material) => {
@@ -216,7 +216,7 @@ fn prepare_generic_instances<M: IntoStandardMaterial>(
         instances.remove(&removed);
     }
     for (entity, aabb, transform, mesh, material) in extracted_instances.extracted.drain(..) {
-        let material = HandleUntyped::weak(material.id());
+        let material = UntypedHandle::Weak(material.id().into());
         let transform = transform.compute_matrix();
         let center = transform.transform_point3a(aabb.center);
         let vertices: Vec<_> = (0..8i32)

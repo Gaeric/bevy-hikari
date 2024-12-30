@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::{
     mesh_material::{
         DynamicInstanceIndex, InstanceIndex, InstanceRenderAssets, PreviousMeshUniform,
@@ -10,7 +12,7 @@ use bevy::{
         lifetimeless::{Read, SRes},
         SystemParamItem,
     },
-    pbr::{DrawMesh, MeshPipelineKey, MeshUniform, SHADOW_FORMAT},
+    pbr::{DrawMesh, MeshPipelineKey, MeshUniform, RenderMeshInstances},
     prelude::*,
     render::{
         camera::ExtractedCamera,
@@ -29,7 +31,7 @@ use bevy::{
         view::{ExtractedView, ViewUniform, ViewUniformOffset, ViewUniforms, VisibleEntities},
         Extract, Render, RenderApp, RenderSet,
     },
-    utils::FloatOrd,
+    utils::{nonmax::NonMaxU32, FloatOrd},
 };
 
 pub const POSITION_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
@@ -171,13 +173,13 @@ impl SpecializedMeshPipeline for PrepassPipeline {
             label: None,
             layout: bind_group_layout,
             vertex: VertexState {
-                shader: PREPASS_SHADER_HANDLE.typed::<Shader>(),
+                shader: PREPASS_SHADER_HANDLE,
                 shader_defs: vertex_shader_defs,
                 entry_point: "vertex".into(),
                 buffers: vec![vertex_buffer_layout],
             },
             fragment: Some(FragmentState {
-                shader: PREPASS_SHADER_HANDLE.typed::<Shader>(),
+                shader: PREPASS_SHADER_HANDLE,
                 shader_defs: Vec::new(),
                 entry_point: "fragment".into(),
                 targets: vec![
@@ -214,7 +216,7 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                 conservative: false,
             },
             depth_stencil: Some(DepthStencilState {
-                format: SHADOW_FORMAT,
+                format: TextureFormat::Depth32Float,
                 depth_write_enabled: true,
                 depth_compare: CompareFunction::GreaterEqual,
                 stencil: StencilState {
@@ -310,7 +312,7 @@ fn prepare_prepass_targets(
             let normal = create_texture(NORMAL_FORMAT);
             let instance_material = create_texture(INSTANCE_MATERIAL_FORMAT);
             let velocity_uv = create_texture(VELOCITY_UV_FORMAT);
-            let depth = create_texture(SHADOW_FORMAT);
+            let depth = create_texture(TextureFormat::Depth32Float);
 
             commands.entity(entity).insert(PrepassTarget {
                 position,
@@ -329,44 +331,44 @@ fn queue_prepass_meshes(
     prepass_pipeline: Res<PrepassPipeline>,
     mut pipelines: ResMut<SpecializedMeshPipelines<PrepassPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
-    meshes: Query<(Entity, &Handle<Mesh>, &MeshUniform, &DynamicInstanceIndex)>,
+    // meshes: Query<(Entity, &Handle<Mesh>, &MeshUniform, &DynamicInstanceIndex)>,
+    render_mesh_instances: Res<RenderMeshInstances>,
     mut views: Query<(&ExtractedView, &VisibleEntities, &mut RenderPhase<Prepass>)>,
 ) {
     let draw_function = draw_functions.read().get_id::<DrawPrepass>().unwrap();
     for (view, visible_entities, mut prepass_phase) in &mut views {
         let rangefinder = view.rangefinder3d();
 
-        let add_render_phase = |(entity, mesh_handle, mesh_uniform, _): (
-            Entity,
-            &Handle<Mesh>,
-            &MeshUniform,
-            &DynamicInstanceIndex,
-        )| {
-            if let Some(mesh) = render_meshes.get(mesh_handle) {
-                let key = MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
-                let pipeline_id =
-                    pipelines.specialize(&mut pipeline_cache, &prepass_pipeline, key, &mesh.layout);
-                let pipeline_id = match pipeline_id {
-                    Ok(id) => id,
-                    Err(err) => {
-                        error!("{}", err);
-                        return;
-                    }
-                };
-                prepass_phase.add(Prepass {
-                    distance: rangefinder.distance(&mesh_uniform.transform),
-                    entity,
-                    pipeline: pipeline_id,
-                    draw_function,
-                });
-            }
-        };
+        for visible_entity in &visible_entities.entities {
+            let Some(mesh_instance) = render_mesh_instances.get(visible_entity) else {
+                return;
+            };
 
-        visible_entities
-            .entities
-            .iter()
-            .filter_map(|visible_entity| meshes.get(*visible_entity).ok())
-            .for_each(add_render_phase);
+            let Some(mesh) = render_meshes.get(mesh_instance.mesh_asset_id) else {
+                return;
+            };
+
+            let key = MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
+            let pipeline_id =
+                pipelines.specialize(&mut pipeline_cache, &prepass_pipeline, key, &mesh.layout);
+
+            let pipeline_id = match pipeline_id {
+                Ok(id) => id,
+                Err(err) => {
+                    error!("{}", err);
+                    return;
+                }
+            };
+            prepass_phase.add(Prepass {
+                distance: rangefinder
+                    .distance_translation(&mesh_instance.transforms.transform.translation),
+                entity: *visible_entity,
+                pipeline: pipeline_id,
+                draw_function,
+                batch_range: 0..1,
+                dynamic_offset: None,
+            });
+        }
     }
 }
 
@@ -381,7 +383,7 @@ fn queue_prepass_bind_group(
     mut commands: Commands,
     prepass_pipeline: Res<PrepassPipeline>,
     render_device: Res<RenderDevice>,
-    mesh_uniforms: Res<ComponentUniforms<MeshUniform>>,
+    mesh_uniforms: Res<GpuArrayBuffer<MeshUniform>>,
     previous_mesh_uniforms: Res<ComponentUniforms<PreviousMeshUniform>>,
     instance_render_assets: Res<InstanceRenderAssets>,
     view_uniforms: Res<ViewUniforms>,
@@ -400,10 +402,10 @@ fn queue_prepass_bind_group(
         previous_mesh_uniforms.binding(),
         instance_render_assets.instance_indices.binding(),
     ) {
-        let view = render_device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &prepass_pipeline.view_layout,
-            entries: &[
+        let view = render_device.create_bind_group(
+            None,
+            &prepass_pipeline.view_layout,
+            &[
                 BindGroupEntry {
                     binding: 0,
                     resource: view_binding,
@@ -413,11 +415,11 @@ fn queue_prepass_bind_group(
                     resource: previous_view_binding,
                 },
             ],
-        });
-        let mesh = render_device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &prepass_pipeline.mesh_layout,
-            entries: &[
+        );
+        let mesh = render_device.create_bind_group(
+            None,
+            &prepass_pipeline.mesh_layout,
+            &[
                 BindGroupEntry {
                     binding: 0,
                     resource: mesh_binding,
@@ -431,7 +433,7 @@ fn queue_prepass_bind_group(
                     resource: instance_indices_binding,
                 },
             ],
-        });
+        );
         commands.insert_resource(PrepassBindGroup { view, mesh });
     }
 }
@@ -441,6 +443,8 @@ pub struct Prepass {
     pub entity: Entity,
     pub pipeline: CachedRenderPipelineId,
     pub draw_function: DrawFunctionId,
+    pub batch_range: Range<u32>,
+    pub dynamic_offset: Option<NonMaxU32>,
 }
 
 impl PhaseItem for Prepass {
@@ -459,6 +463,26 @@ impl PhaseItem for Prepass {
     #[inline]
     fn entity(&self) -> Entity {
         self.entity
+    }
+
+    #[inline]
+    fn batch_range(&self) -> &Range<u32> {
+        &self.batch_range
+    }
+
+    #[inline]
+    fn batch_range_mut(&mut self) -> &mut Range<u32> {
+        &mut self.batch_range
+    }
+
+    #[inline]
+    fn dynamic_offset(&self) -> Option<NonMaxU32> {
+        self.dynamic_offset
+    }
+
+    #[inline]
+    fn dynamic_offset_mut(&mut self) -> &mut Option<NonMaxU32> {
+        &mut self.dynamic_offset
     }
 }
 
@@ -505,12 +529,12 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassViewBindGroup<
 
 pub struct SetPrepassMeshBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<I> {
-    type Param = SRes<PrepassBindGroup>;
+    type Param = (SRes<PrepassBindGroup>, SRes<RenderMeshInstances>);
 
     type ViewWorldQuery = ();
 
     type ItemWorldQuery = (
-        Read<DynamicUniformIndex<MeshUniform>>,
+        // Read<DynamicUniformIndex<MeshUniform>>,
         Read<DynamicUniformIndex<PreviousMeshUniform>>,
         Read<DynamicInstanceIndex>,
     );
@@ -518,11 +542,11 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
     fn render<'w>(
         _item: &P,
         _view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
-        (mesh_uniform, previous_mesh_uniform, instance_index): bevy::ecs::query::ROQueryItem<
+        (previous_mesh_uniform, instance_index): bevy::ecs::query::ROQueryItem<
             'w,
             Self::ItemWorldQuery,
         >,
-        bind_group: SystemParamItem<'w, '_, Self::Param>,
+        (bind_group, mesh_instances): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         pass.set_bind_group(

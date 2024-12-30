@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::{light::LightPassTarget, OVERLAY_SHADER_HANDLE, QUAD_HANDLE};
 use bevy::{
     core_pipeline::clear_color::ClearColorConfig,
@@ -20,7 +22,7 @@ use bevy::{
         view::ViewTarget,
         Extract, Render, RenderApp, RenderSet,
     },
-    utils::FloatOrd,
+    utils::{nonmax::NonMaxU32, FloatOrd},
 };
 
 pub struct OverlayPlugin;
@@ -55,7 +57,7 @@ impl Plugin for OverlayPlugin {
 
 fn setup(mut meshes: ResMut<Assets<Mesh>>) {
     let mesh: Mesh = Quad::new(Vec2::new(2.0, 2.0)).into();
-    meshes.set_untracked(QUAD_HANDLE, mesh);
+    meshes.insert(QUAD_HANDLE, mesh);
 }
 
 #[derive(Resource)]
@@ -111,13 +113,13 @@ impl SpecializedMeshPipeline for OverlayPipeline {
             label: None,
             layout: bind_group_layout,
             vertex: VertexState {
-                shader: OVERLAY_SHADER_HANDLE.typed::<Shader>(),
+                shader: OVERLAY_SHADER_HANDLE,
                 shader_defs: shader_defs.clone(),
                 entry_point: "vertex".into(),
                 buffers: vec![vertex_buffer_layout],
             },
             fragment: Some(FragmentState {
-                shader: OVERLAY_SHADER_HANDLE.typed::<Shader>(),
+                shader: OVERLAY_SHADER_HANDLE,
                 shader_defs: shader_defs.clone(),
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
@@ -170,10 +172,10 @@ fn queue_overlay_bind_groups(
     query: Query<(Entity, &LightPassTarget)>,
 ) {
     for (entity, target) in &query {
-        let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &pipeline.overlay_layout,
-            entries: &[
+        let bind_group = render_device.create_bind_group(
+            None,
+            &pipeline.overlay_layout,
+            &[
                 BindGroupEntry {
                     binding: 0,
                     resource: BindingResource::TextureView(&target.render.texture_view),
@@ -183,7 +185,7 @@ fn queue_overlay_bind_groups(
                     resource: BindingResource::Sampler(&target.render.sampler),
                 },
             ],
-        });
+        );
         commands.entity(entity).insert(OverlayBindGroup(bind_group));
     }
 }
@@ -220,6 +222,8 @@ fn queue_overlay_mesh(
                 entity,
                 pipeline: pipeline_id,
                 draw_function,
+                batch_range: 0..1,
+                dynamic_offset: None,
             });
         }
     }
@@ -231,6 +235,8 @@ pub struct Overlay {
     pub entity: Entity,
     pub pipeline: CachedRenderPipelineId,
     pub draw_function: DrawFunctionId,
+    pub batch_range: Range<u32>,
+    pub dynamic_offset: Option<NonMaxU32>,
 }
 
 impl PhaseItem for Overlay {
@@ -249,6 +255,26 @@ impl PhaseItem for Overlay {
     #[inline]
     fn draw_function(&self) -> DrawFunctionId {
         self.draw_function
+    }
+
+    #[inline]
+    fn batch_range(&self) -> &Range<u32> {
+        &self.batch_range
+    }
+
+    #[inline]
+    fn batch_range_mut(&mut self) -> &mut Range<u32> {
+        &mut self.batch_range
+    }
+
+    #[inline]
+    fn dynamic_offset(&self) -> Option<NonMaxU32> {
+        self.dynamic_offset
+    }
+
+    #[inline]
+    fn dynamic_offset_mut(&mut self) -> &mut Option<NonMaxU32> {
+        &mut self.dynamic_offset
     }
 }
 
