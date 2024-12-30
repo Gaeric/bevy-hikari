@@ -1,11 +1,11 @@
 use bevy::{
     asset::load_internal_asset,
-    core_pipeline::{core_2d::graph::node::END_MAIN_PASS_POST_PROCESSING, core_3d::MainPass3dNode},
+    core_pipeline::{self, core_3d},
     prelude::*,
     reflect::TypeUuid,
     render::{
         extract_resource::ExtractResource,
-        render_graph::{EmptyNode, RenderGraph, SlotInfo, SlotType},
+        render_graph::{RenderGraph, SlotInfo, SlotType},
         RenderApp,
     },
 };
@@ -31,9 +31,9 @@ pub mod graph {
     }
     pub mod node {
         pub const PREPASS: &str = "prepass";
-        pub const LIGHT_DIRECT_PASS: &str = "light_direct_pass";
-        pub const LIGHT_INDIRECT_PASS: &str = "light_indirect_pass";
+        pub const LIGHT_PASS: &str = "light_direct_pass";
         pub const OVERLAY_PASS: &str = "overlay_pass";
+        pub const UPSCALING: &str = "upscaling";
     }
 }
 
@@ -140,52 +140,60 @@ impl Plugin for HikariPlugin {
             .add_plugin(OverlayPlugin)
             .add_startup_system(load_system);
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            let prepass_node = PrepassNode::new(&mut render_app.world);
-            let light_pass_node = LightPassNode::new(&mut render_app.world);
-            let overlay_pass_node = OverlayPassNode::new(&mut render_app.world);
-            // let pass_node_3d = MainPass3dNode::new(&mut render_app.world);
+        let render_app = match app.get_sub_app_mut(RenderApp) {
+            Ok(render_app) => render_app,
+            Err(_) => return,
+        };
 
-            let mut graph = render_app.world.resource_mut::<RenderGraph>();
+        let prepass_node = PrepassNode::new(&mut render_app.world);
+        let light_pass_node = LightPassNode::new(&mut render_app.world);
+        let overlay_pass_node = OverlayPassNode::new(&mut render_app.world);
+        let upscaling = core_pipeline::upscaling::UpscalingNode::new(&mut render_app.world);
 
-            info!("origin graph is {:?}", graph);
+        let mut graph = render_app.world.resource_mut::<RenderGraph>();
 
-            let mut hikari_graph = RenderGraph::default();
-            hikari_graph.add_node(graph::node::PREPASS, prepass_node);
-            hikari_graph.add_node(graph::node::LIGHT_DIRECT_PASS, light_pass_node);
-            hikari_graph.add_node(graph::node::OVERLAY_PASS, overlay_pass_node);
-            hikari_graph.add_node(END_MAIN_PASS_POST_PROCESSING, EmptyNode);
+        let mut hikari = RenderGraph::default();
+        hikari.add_node(graph::node::PREPASS, prepass_node);
+        hikari.add_node(graph::node::LIGHT_PASS, light_pass_node);
+        hikari.add_node(graph::node::OVERLAY_PASS, overlay_pass_node);
+        hikari.add_node(graph::node::UPSCALING, upscaling);
 
-            let input_node_id = hikari_graph.set_input(vec![SlotInfo::new(
-                graph::input::VIEW_ENTITY,
-                SlotType::Entity,
-            )]);
-            hikari_graph.add_slot_edge(
-                input_node_id,
-                graph::input::VIEW_ENTITY,
-                graph::node::PREPASS,
-                PrepassNode::IN_VIEW,
-            );
-            hikari_graph.add_slot_edge(
-                input_node_id,
-                graph::input::VIEW_ENTITY,
-                graph::node::LIGHT_DIRECT_PASS,
-                LightPassNode::IN_VIEW,
-            );
-            hikari_graph.add_node_edge(graph::node::PREPASS, graph::node::LIGHT_DIRECT_PASS);
-            // refer MainPass3dNode
-            hikari_graph.add_slot_edge(
-                input_node_id,
-                graph::input::VIEW_ENTITY,
-                graph::node::OVERLAY_PASS,
-                MainPass3dNode::IN_VIEW,
-            );
-            hikari_graph.add_node_edge(graph::node::LIGHT_DIRECT_PASS, graph::node::OVERLAY_PASS);
-            hikari_graph.add_node_edge(graph::node::OVERLAY_PASS, END_MAIN_PASS_POST_PROCESSING);
-            info!("hikari graph is {:?}", hikari_graph);
-            graph.add_sub_graph(graph::NAME, hikari_graph);
-            info!("last graph is {:?}", graph);
-        }
+        let input_node_id = hikari.set_input(vec![SlotInfo::new(
+            graph::input::VIEW_ENTITY,
+            SlotType::Entity,
+        )]);
 
+        hikari.add_slot_edge(
+            input_node_id,
+            graph::input::VIEW_ENTITY,
+            graph::node::PREPASS,
+            PrepassNode::IN_VIEW,
+        );
+
+        hikari.add_slot_edge(
+            input_node_id,
+            graph::input::VIEW_ENTITY,
+            graph::node::LIGHT_PASS,
+            LightPassNode::IN_VIEW,
+        );
+
+        hikari.add_slot_edge(
+            input_node_id,
+            graph::input::VIEW_ENTITY,
+            graph::node::OVERLAY_PASS,
+            OverlayPassNode::IN_VIEW,
+        );
+
+        hikari.add_slot_edge(
+            input_node_id,
+            graph::input::VIEW_ENTITY,
+            core_3d::graph::node::UPSCALING,
+            core_pipeline::upscaling::UpscalingNode::IN_VIEW,
+        );
+
+        hikari.add_node_edge(graph::node::PREPASS, graph::node::LIGHT_PASS);
+        hikari.add_node_edge(graph::node::LIGHT_PASS, graph::node::OVERLAY_PASS);
+
+        graph.add_sub_graph(graph::NAME, hikari);
     }
 }
