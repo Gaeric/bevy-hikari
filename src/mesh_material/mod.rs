@@ -46,18 +46,21 @@ impl Plugin for MeshMaterialPlugin {
         ));
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app
-                .init_resource::<MeshMaterialBindGroupLayout>()
-                .add_systems(
-                    Render,
-                    (
-                        prepare_texture_bind_group_layout
-                            .in_set(RenderSet::Prepare)
-                            .after(MeshMaterialSystems::PrepareAssets),
-                        queue_mesh_material_bind_group.in_set(RenderSet::Queue),
-                    ),
-                );
+            render_app.add_systems(
+                Render,
+                (
+                    prepare_texture_bind_group_layout
+                        .in_set(RenderSet::Prepare)
+                        .after(MeshMaterialSystems::PrepareAssets),
+                    queue_mesh_material_bind_group.in_set(RenderSet::Queue),
+                ),
+            );
         }
+    }
+
+    fn finish(&self, app: &mut App) {
+        app.sub_app_mut(RenderApp)
+            .init_resource::<MeshMaterialBindGroupLayout>();
     }
 }
 
@@ -329,6 +332,7 @@ pub enum MeshMaterialSystems {
 
 #[derive(Resource, Debug)]
 pub struct MeshMaterialBindGroupLayout(pub BindGroupLayout);
+
 impl FromWorld for MeshMaterialBindGroupLayout {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
@@ -549,9 +553,9 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetMeshMaterialBindGroup
     type ItemWorldQuery = ();
 
     fn render<'w>(
-        item: &P,
-        view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
-        entity: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
+        _item: &P,
+        _view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
+        _entity: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {

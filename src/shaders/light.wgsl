@@ -1,10 +1,25 @@
 #import bevy_pbr::mesh_view_bindings
-#import bevy_pbr::utils
-#import bevy_pbr::lighting
+#import bevy_pbr::lighting as lighting
 
 #import bevy_hikari::mesh_material_bindings
-#import bevy_hikari::deferred_bindings
 #import bevy_hikari::overlay
+#import bevy_pbr::utils               PI
+
+#import bevy_pbr::mesh_view_bindings  lights
+#import bevy_pbr::mesh_view_bindings  view
+#import bevy_pbr::mesh_view_types DirectionalLight
+
+#import bevy_hikari::mesh_material_types Instance
+#import bevy_hikari::mesh_material_types Slice
+#import bevy_hikari::mesh_material_bindings asset_node_buffer
+#import bevy_hikari::mesh_material_bindings primitive_buffer
+#import bevy_hikari::mesh_material_bindings vertex_buffer
+#import bevy_hikari::mesh_material_bindings instance_buffer
+#import bevy_hikari::mesh_material_bindings instance_node_buffer
+#import bevy_hikari::mesh_material_bindings material_buffer
+#import bevy_hikari::overlay luminance
+
+#import bevy_hikari::deferred_bindings as deferred
 
 @group(3) @binding(0)
 var textures: binding_array<texture_2d<f32>>;
@@ -351,7 +366,7 @@ fn retreive_surface(material_id: u32, uv: vec2<f32>) -> Surface {
         surface.occlusion = textureSampleLevel(textures[id], samplers[id], uv, 0.0).r;
     }
 
-    surface.roughness = perceptualRoughnessToRoughness(material.perceptual_roughness);
+    surface.roughness = lighting::perceptualRoughnessToRoughness(material.perceptual_roughness);
     surface.reflectance = material.reflectance;
 
     return surface;
@@ -484,10 +499,10 @@ fn virtual_light(
     let NoH = saturate(dot(normal, half_vector));
     let LoH = saturate(dot(incident_light, half_vector));
 
-    let diffuse = diffuse_color * Fd_Burley(roughness, NdotV, NoL, LoH);
+    let diffuse = diffuse_color * lighting::Fd_Burley(roughness, NdotV, NoL, LoH);
     let specular_intensity = 1.0;
-    let f_ab = F_AB(roughness, NdotV);
-    let specular_light = specular(F0, roughness, half_vector, NdotV, NoL, NoH, LoH, specular_intensity, f_ab);
+    let f_ab = lighting::F_AB(roughness, NdotV);
+    let specular_light = lighting::specular(F0, roughness, half_vector, NdotV, NoL, NoH, LoH, specular_intensity, f_ab);
 
     return (specular_light + diffuse) * light.radiance * NoL;
 }
@@ -525,8 +540,8 @@ fn shading(
         if (dot(light.direction_to_light, ray.direction) > cos(SOLAR_ANGLE)) {
             out_radiance = virtual_light(v, surface.roughness, NdotV, N, V, R, F0, diffuse_color);
         } else {
-            let diffuse_ambient = EnvBRDFApprox(diffuse_color, F_AB(1.0, NdotV));
-            let specular_ambient = EnvBRDFApprox(F0, F_AB(surface.roughness, NdotV));
+            let diffuse_ambient = lighting::EnvBRDFApprox(diffuse_color, lighting::F_AB(1.0, NdotV));
+            let specular_ambient = lighting::EnvBRDFApprox(F0, lighting::F_AB(surface.roughness, NdotV));
             out_radiance = surface.occlusion * (diffuse_ambient + specular_ambient) * lights.ambient_color.rgb;
         }
     } else {
@@ -552,7 +567,7 @@ fn direct_lit(
     let coords = vec2<i32>(invocation_id.xy);
     var s = empty_sample();
 
-    let position = textureSampleLevel(position_texture, position_sampler, uv, 0.0);
+    let position = textureSampleLevel(deferred::position_texture, deferred::position_sampler, uv, 0.0);
     if (position.w < 0.5) {
         var r: Reservoir;
         r.s = s;
@@ -567,9 +582,9 @@ fn direct_lit(
     let depth = ndc.z / ndc.w;
     let view_direction = calculate_view(position, view.projection[3].w == 1.0);
 
-    let normal = textureSampleLevel(normal_texture, normal_sampler, uv, 0.0).xyz;
-    let instance_material = textureLoad(instance_material_texture, coords, 0);
-    let velocity_uv = textureSampleLevel(velocity_uv_texture, velocity_uv_sampler, uv, 0.0);
+    let normal = textureSampleLevel(deferred::normal_texture, deferred::normal_sampler, uv, 0.0).xyz;
+    let instance_material = textureLoad(deferred::instance_material_texture, coords, 0);
+    let velocity_uv = textureSampleLevel(deferred::velocity_uv_texture, deferred::velocity_uv_sampler, uv, 0.0);
     let surface = retreive_surface(instance_material.y, velocity_uv.zw);
 
     // let hashed_frame_number = hash(frame.number);

@@ -6,15 +6,14 @@ use crate::{
 use bevy::{
     pbr::{
         GlobalLightMeta, GpuLights, GpuPointLights, LightMeta, MeshPipeline, ShadowSamplers,
-        ViewClusterBindings, ViewLightsUniformOffset, ViewShadowBindings, MAX_CASCADES_PER_LIGHT,
-        MAX_DIRECTIONAL_LIGHTS,
+        ViewClusterBindings, ViewLightsUniformOffset, ViewShadowBindings,
     },
     prelude::*,
     render::{
         camera::ExtractedCamera,
         extract_resource::ExtractResourcePlugin,
         render_asset::RenderAssets,
-        render_graph::{Node, NodeRunError, RenderGraphContext, SlotInfo, SlotType},
+        render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_resource::*,
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::{GpuImage, TextureCache},
@@ -39,7 +38,6 @@ impl Plugin for LightPlugin {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<FrameCounter>()
-                .init_resource::<LightPipeline>()
                 .init_resource::<SpecializedComputePipelines<LightPipeline>>()
                 .init_resource::<FrameUniform>()
                 .add_systems(
@@ -53,6 +51,10 @@ impl Plugin for LightPlugin {
                     ),
                 );
         }
+    }
+
+    fn finish(&self, app: &mut App) {
+        app.sub_app_mut(RenderApp).init_resource::<LightPipeline>();
     }
 }
 
@@ -421,15 +423,7 @@ impl SpecializedComputePipeline for LightPipeline {
     type Key = LightPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> ComputePipelineDescriptor {
-        let mut shader_defs = Vec::new();
-        shader_defs.push(ShaderDefVal::Int(
-            "MAX_DIRECTIONAL_LIGHTS".to_string(),
-            MAX_DIRECTIONAL_LIGHTS as i32,
-        ));
-        shader_defs.push(ShaderDefVal::Int(
-            "MAX_CASCADES_PER_LIGHT".to_string(),
-            MAX_CASCADES_PER_LIGHT as i32,
-        ));
+        let shader_defs = Vec::new();
 
         ComputePipelineDescriptor {
             label: None,
@@ -878,50 +872,28 @@ fn queue_light_bind_groups(
 }
 
 // [0.8] refer prepare_lights
-pub struct LightPassNode {
-    query: QueryState<(
+// [0.11] refer PrepassNode
+#[derive(Default)]
+pub struct LightPassNode;
+
+impl ViewNode for LightPassNode {
+    type ViewQuery = (
         &'static ExtractedCamera,
         &'static ViewUniformOffset,
         &'static ViewLightsUniformOffset,
         &'static ViewBindGroup,
         &'static LightBindGroup,
-    )>,
-}
+    );
 
-impl LightPassNode {
-    pub const IN_VIEW: &'static str = "view";
-
-    pub fn new(world: &mut World) -> Self {
-        Self {
-            query: world.query_filtered(),
-        }
-    }
-}
-
-// [0.8] this is a compute node, could just refer GameOfLifeNode
-// [0.8] refer MainPass3dNode
-impl Node for LightPassNode {
-    fn input(&self) -> Vec<SlotInfo> {
-        vec![SlotInfo::new(Self::IN_VIEW, SlotType::Entity)]
-    }
-
-    fn update(&mut self, world: &mut World) {
-        self.query.update_archetypes(world);
-    }
-
-    // [0.8] refer MainPass3dNode
     fn run(
         &self,
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
+        (camera, view_uniform, view_lights, view_bind_group, light_bind_group): bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        let entity = graph.get_input_entity(Self::IN_VIEW)?;
-        let (camera, view_uniform, view_lights, view_bind_group, light_bind_group) =
-            match self.query.get_manual(world, entity) {
-                Ok(query) => query,
-                Err(_) => return Ok(()),
-            };
+        let _view_entity = graph.view_entity();
+
         let mesh_material_bind_group = match world.get_resource::<MeshMaterialBindGroup>() {
             Some(bind_group) => bind_group,
             None => return Ok(()),

@@ -1,5 +1,11 @@
-#import bevy_pbr::mesh_view_types
+#import bevy_pbr::mesh_functions mesh_position_local_to_world
+#import bevy_pbr::mesh_functions mesh_normal_local_to_world
 #import bevy_pbr::mesh_types
+#import bevy_pbr::mesh_functions
+
+#import bevy_render::view
+
+#import bevy_pbr::mesh_bindings       mesh
 
 struct PreviousView {
     view_proj: mat4x4<f32>,
@@ -17,18 +23,17 @@ struct InstanceIndex {
 };
 
 @group(0) @binding(0)
-var<uniform> view: View;
+var<uniform> view: bevy_render::view::View;
 @group(0) @binding(1)
 var<uniform> previous_view: PreviousView;
 
-@group(1) @binding(0)
-var<uniform> mesh: Mesh;
+// use bevy_pbr::mesh_bindings::mesh
+// @group(1) @binding(0)
+// var<uniform> mesh: bevy_pbr::mesh_types::Mesh;
 @group(1) @binding(1)
 var<uniform> previous_mesh: PreviousMesh;
 @group(1) @binding(2)
 var<uniform> instance_index: InstanceIndex;
-
-#import bevy_pbr::mesh_functions
 
 struct Vertex {
     @location(0) position: vec3<f32>,

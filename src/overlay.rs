@@ -2,13 +2,13 @@ use crate::{light::LightPassTarget, OVERLAY_SHADER_HANDLE, QUAD_HANDLE};
 use bevy::{
     core_pipeline::clear_color::ClearColorConfig,
     ecs::system::{lifetimeless::Read, SystemParamItem},
-    pbr::{DrawMesh, MeshPipelineKey, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS},
+    pbr::{DrawMesh, MeshPipelineKey},
     prelude::{shape::Quad, *},
     render::{
         camera::ExtractedCamera,
         mesh::MeshVertexBufferLayout,
         render_asset::RenderAssets,
-        render_graph::{Node, NodeRunError, RenderGraphContext, SlotInfo, SlotType},
+        render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_phase::{
             AddRenderCommand, CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions,
             PhaseItem, RenderCommand, RenderCommandResult, RenderPhase, SetItemPipeline,
@@ -17,7 +17,7 @@ use bevy::{
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
         texture::BevyDefault,
-        view::{ExtractedView, ViewTarget},
+        view::ViewTarget,
         Extract, Render, RenderApp, RenderSet,
     },
     utils::FloatOrd,
@@ -31,7 +31,6 @@ impl Plugin for OverlayPlugin {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<DrawFunctions<Overlay>>()
-                .init_resource::<OverlayPipeline>()
                 .init_resource::<SpecializedMeshPipelines<OverlayPipeline>>()
                 .add_render_command::<Overlay, DrawOverlay>()
                 .add_systems(
@@ -46,6 +45,11 @@ impl Plugin for OverlayPlugin {
                     ),
                 );
         }
+    }
+
+    fn finish(&self, app: &mut App) {
+        app.sub_app_mut(RenderApp)
+            .init_resource::<OverlayPipeline>();
     }
 }
 
@@ -101,15 +105,7 @@ impl SpecializedMeshPipeline for OverlayPipeline {
         let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
         let bind_group_layout = vec![self.overlay_layout.clone()];
 
-        let mut shader_defs = Vec::new();
-        shader_defs.push(ShaderDefVal::Int(
-            "MAX_DIRECTIONAL_LIGHTS".to_string(),
-            MAX_DIRECTIONAL_LIGHTS as i32,
-        ));
-        shader_defs.push(ShaderDefVal::Int(
-            "MAX_CASCADES_PER_LIGHT".to_string(),
-            MAX_CASCADES_PER_LIGHT as i32,
-        ));
+        let shader_defs = Vec::new();
 
         Ok(RenderPipelineDescriptor {
             label: None,
@@ -277,7 +273,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOverlayBindGroup<I> {
         _item: &P,
         bind_group: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
         _: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
-        param: SystemParamItem<'w, '_, Self::Param>,
+        _param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         trace!("render overlay");
@@ -286,55 +282,29 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOverlayBindGroup<I> {
     }
 }
 
-pub struct OverlayPassNode {
-    query: QueryState<
-        (
-            &'static ExtractedCamera,
-            &'static RenderPhase<Overlay>,
-            &'static Camera3d,
-            &'static ViewTarget,
-        ),
-        With<ExtractedView>,
-    >,
-}
+#[derive(Default)]
+pub struct OverlayPassNode;
 
-impl OverlayPassNode {
-    pub const IN_VIEW: &'static str = "view";
-
-    pub fn new(world: &mut World) -> Self {
-        Self {
-            query: world.query_filtered(),
-        }
-    }
-}
-
-// [0.8] refer MainPass3dNode
-impl Node for OverlayPassNode {
-    fn input(&self) -> Vec<SlotInfo> {
-        vec![SlotInfo::new(Self::IN_VIEW, SlotType::Entity)]
-    }
-
-    fn update(&mut self, world: &mut World) {
-        self.query.update_archetypes(world);
-    }
+impl ViewNode for OverlayPassNode {
+    type ViewQuery = (
+        &'static ExtractedCamera,
+        &'static RenderPhase<Overlay>,
+        &'static Camera3d,
+        &'static ViewTarget,
+    );
 
     fn run(
         &self,
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
+        (camera, overlay_phase, camera_3d, target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        let view_entity = graph.get_input_entity(Self::IN_VIEW)?;
-        let (camera, overlay_phase, camera_3d, target) =
-            match self.query.get_manual(world, view_entity) {
-                Ok(query) => query,
-                Err(_) => return Ok(()),
-            };
+        let view_entity = graph.view_entity();
 
         // [0.8] refer MainPass3dNode::run() main_opaque_pass_3d section
         {
-            #[cfg(feature = "trace")]
-            let _main_prepass_span = info_span!("main_prepass").entered();
+            // let _main_prepass_span = info_span!("main_prepass").entered();
 
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("main_prepass"),
