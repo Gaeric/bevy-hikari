@@ -8,7 +8,7 @@ use bevy::{
     render::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        Extract, RenderApp, RenderSet,
+        Extract, Render, RenderApp, RenderSet,
     },
     utils::{HashMap, HashSet},
 };
@@ -25,7 +25,8 @@ impl Plugin for MaterialPlugin {
                 .init_resource::<MaterialRenderAssets>()
                 .init_resource::<StandardMaterials>()
                 .init_resource::<GpuStandardMaterials>()
-                .add_system(
+                .add_systems(
+                    Render,
                     prepare_material_assets
                         .in_set(RenderSet::Prepare)
                         .in_set(MeshMaterialSystems::PrepareAssets)
@@ -41,12 +42,12 @@ impl<M: IntoStandardMaterial> Plugin for GenericMaterialPlugin<M> {
     fn build(&self, app: &mut App) {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
-                .add_system(
-                    extract_material_assets::<M>
-                        .in_set(RenderSet::ExtractCommands)
-                        .in_schedule(ExtractSchedule),
+                .add_systems(
+                    ExtractSchedule,
+                    extract_material_assets::<M>.in_set(RenderSet::ExtractCommands),
                 )
-                .add_system(
+                .add_systems(
+                    Render,
                     prepare_generic_material_assets::<M>
                         .in_set(RenderSet::Prepare)
                         .in_set(MeshMaterialSystems::PrePrepareAssets),

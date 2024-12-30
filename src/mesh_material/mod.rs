@@ -13,7 +13,7 @@ use bevy::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::*,
         renderer::RenderDevice,
-        RenderApp, RenderSet,
+        Render, RenderApp, RenderSet,
     },
 };
 use bvh::{
@@ -37,21 +37,26 @@ pub use mesh::MeshRenderAssets;
 pub struct MeshMaterialPlugin;
 impl Plugin for MeshMaterialPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(MeshPlugin)
-            .add_plugin(MaterialPlugin)
-            .add_plugin(InstancePlugin)
-            .add_plugin(GenericMaterialPlugin::<StandardMaterial>::default())
-            .add_plugin(GenericInstancePlugin::<StandardMaterial>::default());
+        app.add_plugins((
+            MeshPlugin,
+            MaterialPlugin,
+            InstancePlugin,
+            GenericMaterialPlugin::<StandardMaterial>::default(),
+            GenericInstancePlugin::<StandardMaterial>::default(),
+        ));
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<MeshMaterialBindGroupLayout>()
-                .add_system(
-                    prepare_texture_bind_group_layout
-                        .in_set(RenderSet::Prepare)
-                        .after(MeshMaterialSystems::PrepareAssets),
-                )
-                .add_system(queue_mesh_material_bind_group.in_set(RenderSet::Queue));
+                .add_systems(
+                    Render,
+                    (
+                        prepare_texture_bind_group_layout
+                            .in_set(RenderSet::Prepare)
+                            .after(MeshMaterialSystems::PrepareAssets),
+                        queue_mesh_material_bind_group.in_set(RenderSet::Queue),
+                    ),
+                );
         }
     }
 }

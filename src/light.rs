@@ -19,7 +19,7 @@ use bevy::{
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::{GpuImage, TextureCache},
         view::{ViewUniform, ViewUniformOffset, ViewUniforms},
-        RenderApp, RenderSet,
+        Render, RenderApp, RenderSet,
     },
 };
 use std::num::NonZeroU32;
@@ -34,7 +34,7 @@ pub const RANDOM_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 pub struct LightPlugin;
 impl Plugin for LightPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(ExtractResourcePlugin::<NoiseTexture>::default());
+        app.add_plugins(ExtractResourcePlugin::<NoiseTexture>::default());
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
@@ -42,11 +42,16 @@ impl Plugin for LightPlugin {
                 .init_resource::<LightPipeline>()
                 .init_resource::<SpecializedComputePipelines<LightPipeline>>()
                 .init_resource::<FrameUniform>()
-                .add_system(prepare_light_pass_targets.in_set(RenderSet::Prepare))
-                .add_system(prepare_frame_uniform.in_set(RenderSet::Prepare))
-                .add_system(queue_view_bind_groups.in_set(RenderSet::Queue))
-                .add_system(queue_light_bind_groups.in_set(RenderSet::Queue))
-                .add_system(queue_light_pipelines.in_set(RenderSet::Queue));
+                .add_systems(
+                    Render,
+                    (
+                        prepare_light_pass_targets.in_set(RenderSet::Prepare),
+                        (prepare_frame_uniform.in_set(RenderSet::Prepare)),
+                        queue_view_bind_groups.in_set(RenderSet::Queue),
+                        queue_light_bind_groups.in_set(RenderSet::Queue),
+                        queue_light_pipelines.in_set(RenderSet::Queue),
+                    ),
+                );
         }
     }
 }

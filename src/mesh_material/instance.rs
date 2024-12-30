@@ -16,7 +16,7 @@ use bevy::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
         view::VisibilitySystems,
-        Extract, RenderApp, RenderSet,
+        Extract, Render, RenderApp, RenderSet,
     },
     transform::TransformSystem,
 };
@@ -27,18 +27,18 @@ use std::{collections::BTreeMap, marker::PhantomData};
 pub struct InstancePlugin;
 impl Plugin for InstancePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(UniformComponentPlugin::<PreviousMeshUniform>::default());
+        app.add_plugins(UniformComponentPlugin::<PreviousMeshUniform>::default());
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<GpuInstances>()
                 .init_resource::<InstanceRenderAssets>()
-                .add_system(
-                    extract_mesh_transforms
-                        .in_set(RenderSet::ExtractCommands)
-                        .in_schedule(ExtractSchedule),
+                .add_systems(
+                    ExtractSchedule,
+                    extract_mesh_transforms.in_set(RenderSet::ExtractCommands),
                 )
-                .add_system(
+                .add_systems(
+                    Render,
                     prepare_instances
                         .in_set(RenderSet::Prepare)
                         .in_set(MeshMaterialSystems::PostPrepareInstances)
@@ -52,21 +52,21 @@ impl Plugin for InstancePlugin {
 pub struct GenericInstancePlugin<M: IntoStandardMaterial>(PhantomData<M>);
 impl<M: IntoStandardMaterial> Plugin for GenericInstancePlugin<M> {
     fn build(&self, app: &mut App) {
-        app.add_event::<InstanceEvent<M>>().add_system(
+        app.add_event::<InstanceEvent<M>>().add_systems(
+            PostUpdate,
             instance_event_system::<M>
-                .in_base_set(CoreSet::PostUpdate)
                 .after(TransformSystem::TransformPropagate)
                 .after(VisibilitySystems::CalculateBounds),
         );
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
-                .add_system(
-                    extract_instances::<M>
-                        .in_set(RenderSet::ExtractCommands)
-                        .in_schedule(ExtractSchedule),
+                .add_systems(
+                    ExtractSchedule,
+                    extract_instances::<M>.in_set(RenderSet::ExtractCommands),
                 )
-                .add_system(
+                .add_systems(
+                    Render,
                     prepare_generic_instances::<M>
                         .in_set(RenderSet::Prepare)
                         .in_set(MeshMaterialSystems::PrepareInstances)
@@ -123,6 +123,7 @@ fn extract_mesh_transforms(
 #[derive(Default, Deref, DerefMut, Resource)]
 pub struct GpuInstances(BTreeMap<Entity, GpuInstance>);
 
+#[derive(Event)]
 pub enum InstanceEvent<M: IntoStandardMaterial> {
     Created(Entity, Handle<Mesh>, Handle<M>),
     Modified(Entity, Handle<Mesh>, Handle<M>),

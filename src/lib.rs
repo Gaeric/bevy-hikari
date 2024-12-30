@@ -1,6 +1,5 @@
 use bevy::{
     asset::load_internal_asset,
-    core_pipeline::{self, core_3d},
     prelude::*,
     reflect::TypeUuid,
     render::{
@@ -132,13 +131,15 @@ impl Plugin for HikariPlugin {
             commands.insert_resource(NoiseTexture(handles));
         };
 
-        app.add_plugin(TransformPlugin)
-            .add_plugin(ViewPlugin)
-            .add_plugin(MeshMaterialPlugin)
-            .add_plugin(PrepassPlugin)
-            .add_plugin(LightPlugin)
-            .add_plugin(OverlayPlugin)
-            .add_startup_system(load_system);
+        app.add_plugins((
+            TransformPlugin,
+            ViewPlugin,
+            MeshMaterialPlugin,
+            PrepassPlugin,
+            LightPlugin,
+            OverlayPlugin,
+        ))
+        .add_systems(Startup, load_system);
 
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => render_app,
@@ -148,7 +149,7 @@ impl Plugin for HikariPlugin {
         let prepass_node = PrepassNode::new(&mut render_app.world);
         let light_pass_node = LightPassNode::new(&mut render_app.world);
         let overlay_pass_node = OverlayPassNode::new(&mut render_app.world);
-        let upscaling = core_pipeline::upscaling::UpscalingNode::new(&mut render_app.world);
+        // let upscaling = core_pipeline::upscaling::UpscalingNode::new(&mut render_app.world);
 
         let mut graph = render_app.world.resource_mut::<RenderGraph>();
 
@@ -156,7 +157,7 @@ impl Plugin for HikariPlugin {
         hikari.add_node(graph::node::PREPASS, prepass_node);
         hikari.add_node(graph::node::LIGHT_PASS, light_pass_node);
         hikari.add_node(graph::node::OVERLAY_PASS, overlay_pass_node);
-        hikari.add_node(graph::node::UPSCALING, upscaling);
+        // hikari.add_node(graph::node::UPSCALING, upscaling);
 
         let input_node_id = hikari.set_input(vec![SlotInfo::new(
             graph::input::VIEW_ENTITY,
@@ -184,12 +185,12 @@ impl Plugin for HikariPlugin {
             OverlayPassNode::IN_VIEW,
         );
 
-        hikari.add_slot_edge(
-            input_node_id,
-            graph::input::VIEW_ENTITY,
-            core_3d::graph::node::UPSCALING,
-            core_pipeline::upscaling::UpscalingNode::IN_VIEW,
-        );
+        // hikari.add_slot_edge(
+        //     input_node_id,
+        //     graph::input::VIEW_ENTITY,
+        //     core_3d::graph::node::UPSCALING,
+        //     core_pipeline::upscaling::UpscalingNode::IN_VIEW,
+        // );
 
         hikari.add_node_edge(graph::node::PREPASS, graph::node::LIGHT_PASS);
         hikari.add_node_edge(graph::node::LIGHT_PASS, graph::node::OVERLAY_PASS);

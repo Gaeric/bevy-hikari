@@ -30,7 +30,7 @@ use bevy::{
         renderer::{RenderContext, RenderDevice},
         texture::{GpuImage, TextureCache},
         view::{ExtractedView, ViewUniform, ViewUniformOffset, ViewUniforms, VisibleEntities},
-        Extract, RenderApp, RenderSet,
+        Extract, Render, RenderApp, RenderSet,
     },
     utils::FloatOrd,
 };
@@ -51,15 +51,19 @@ impl Plugin for PrepassPlugin {
                 .init_resource::<PrepassPipeline>()
                 .init_resource::<SpecializedMeshPipelines<PrepassPipeline>>()
                 .add_render_command::<Prepass, DrawPrepass>()
-                .add_system(
-                    extract_prepass_camera_phases
-                        .in_set(RenderSet::ExtractCommands)
-                        .in_schedule(ExtractSchedule),
+                .add_systems(
+                    ExtractSchedule,
+                    extract_prepass_camera_phases.in_set(RenderSet::ExtractCommands),
                 )
-                .add_system(prepare_prepass_targets.in_set(RenderSet::Prepare))
-                .add_system(queue_prepass_meshes.in_set(RenderSet::Queue))
-                .add_system(queue_prepass_bind_group.in_set(RenderSet::Queue))
-                .add_system(sort_phase_system::<Prepass>.in_set(RenderSet::PhaseSort));
+                .add_systems(
+                    Render,
+                    (
+                        prepare_prepass_targets.in_set(RenderSet::Prepare),
+                        queue_prepass_meshes.in_set(RenderSet::Queue),
+                        queue_prepass_bind_group.in_set(RenderSet::Queue),
+                        sort_phase_system::<Prepass>.in_set(RenderSet::PhaseSort),
+                    ),
+                );
         }
     }
 }

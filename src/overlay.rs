@@ -18,7 +18,7 @@ use bevy::{
         renderer::{RenderContext, RenderDevice},
         texture::BevyDefault,
         view::{ExtractedView, ViewTarget},
-        Extract, RenderApp, RenderSet,
+        Extract, Render, RenderApp, RenderSet,
     },
     utils::FloatOrd,
 };
@@ -26,7 +26,7 @@ use bevy::{
 pub struct OverlayPlugin;
 impl Plugin for OverlayPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup);
+        app.add_systems(Startup, setup);
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
@@ -34,13 +34,17 @@ impl Plugin for OverlayPlugin {
                 .init_resource::<OverlayPipeline>()
                 .init_resource::<SpecializedMeshPipelines<OverlayPipeline>>()
                 .add_render_command::<Overlay, DrawOverlay>()
-                .add_system(
-                    extract_overlay_camera_phases
-                        .in_set(RenderSet::ExtractCommands)
-                        .in_schedule(ExtractSchedule),
+                .add_systems(
+                    ExtractSchedule,
+                    extract_overlay_camera_phases.in_set(RenderSet::ExtractCommands),
                 )
-                .add_system(queue_overlay_bind_groups.in_set(RenderSet::Queue))
-                .add_system(queue_overlay_mesh.in_set(RenderSet::Queue));
+                .add_systems(
+                    Render,
+                    (
+                        queue_overlay_bind_groups.in_set(RenderSet::Queue),
+                        queue_overlay_mesh.in_set(RenderSet::Queue),
+                    ),
+                );
         }
     }
 }
