@@ -41,8 +41,8 @@ impl Plugin for MeshMaterialPlugin {
             MeshPlugin,
             MaterialPlugin,
             InstancePlugin,
-            GenericMaterialPlugin::<StandardMaterial>::default(),
-            GenericInstancePlugin::<StandardMaterial>::default(),
+            GenericMaterialPlugin::default(),
+            GenericInstancePlugin::default(),
         ));
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
@@ -50,7 +50,7 @@ impl Plugin for MeshMaterialPlugin {
                 Render,
                 (
                     prepare_texture_bind_group_layout
-                        .in_set(RenderSet::Prepare)
+                        .in_set(RenderSet::PrepareAssets)
                         .after(MeshMaterialSystems::PrepareAssets),
                     queue_mesh_material_bind_group.in_set(RenderSet::Queue),
                 ),
@@ -307,21 +307,6 @@ pub struct GpuMeshSlice {
     pub node_len: u32,
 }
 
-pub trait IntoStandardMaterial: Material {
-    /// Coverts a [`Material`] into a [`StandardMaterial`].
-    /// Any new textures should be registered into [`MaterialRenderAssets`].
-    fn into_standard_material(self, render_assets: &mut MaterialRenderAssets) -> StandardMaterial;
-}
-
-impl IntoStandardMaterial for StandardMaterial {
-    fn into_standard_material(self, render_assets: &mut MaterialRenderAssets) -> Self {
-        if let Some(texture) = &self.base_color_texture {
-            render_assets.textures.insert(texture.clone_weak());
-        }
-        self
-    }
-}
-
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub enum MeshMaterialSystems {
     PrePrepareAssets,
@@ -423,6 +408,8 @@ fn prepare_texture_bind_group_layout(
     render_device: Res<RenderDevice>,
     materials: Res<MaterialRenderAssets>,
 ) {
+    error!("prepare texture bind group layout");
+
     let count = materials.textures.len();
     let layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
         label: None,

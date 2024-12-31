@@ -378,6 +378,7 @@ pub struct PrepassBindGroup {
     pub mesh: BindGroup,
 }
 
+// [0.12] prepare_mesh_bind_group
 #[allow(clippy::too_many_arguments)]
 fn queue_prepass_bind_group(
     mut commands: Commands,
@@ -540,7 +541,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
     );
 
     fn render<'w>(
-        _item: &P,
+        item: &P,
         _view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
         (previous_mesh_uniform, instance_index): bevy::ecs::query::ROQueryItem<
             'w,
@@ -549,11 +550,25 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
         (bind_group, mesh_instances): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
+        let mesh_instances = mesh_instances.into_inner();
+        let entity = &item.entity();
+
+        let Some(_) = mesh_instances.get(entity) else {
+            return RenderCommandResult::Success;
+        };
+
+        let mut dynamic_offsets: [u32; 1] = Default::default();
+
+        if let Some(dynamic_offset) = item.dynamic_offset() {
+            dynamic_offsets[0] = dynamic_offset.get();
+        }
+
+        
         pass.set_bind_group(
             I,
             &bind_group.into_inner().mesh,
             &[
-                mesh_uniform.index(),
+                dynamic_offsets[0],
                 previous_mesh_uniform.index(),
                 instance_index.0,
             ],

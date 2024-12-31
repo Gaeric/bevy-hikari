@@ -51,10 +51,11 @@ pub const PREPASS_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(4693612
 pub const LIGHT_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(9657319286592943583);
 pub const OVERLAY_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(10969344919103020615);
 
-pub const QUAD_HANDLE: UntypedHandle = UntypedHandle::Weak(UntypedAssetId::Uuid {
-    type_id: TypeId::of::<Mesh>(),
-    uuid: Uuid::from_u128(4740146776519512271),
-});
+pub const QUAD_HANDLE: Handle<Mesh> = Handle::weak_from_u128(4740146776519512271);
+// pub const QUAD_HANDLE: UntypedHandle = UntypedHandle::Weak(UntypedAssetId::Uuid {
+//     type_id: TypeId::of::<Mesh>(),
+//     uuid: Uuid::from_u128(4740146776519512271),
+// });
 
 pub struct HikariPlugin {
     noise_folder: String,

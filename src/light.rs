@@ -44,10 +44,10 @@ impl Plugin for LightPlugin {
                     Render,
                     (
                         prepare_light_pass_targets.in_set(RenderSet::Prepare),
-                        prepare_frame_uniform.in_set(RenderSet::Prepare),
-                        queue_light_pipelines.in_set(RenderSet::Prepare),
-                        queue_view_bind_groups.in_set(RenderSet::PrepareBindGroups),
-                        queue_light_bind_groups.in_set(RenderSet::PrepareBindGroups),
+                        (prepare_frame_uniform.in_set(RenderSet::Prepare)),
+                        queue_view_bind_groups.in_set(RenderSet::Queue),
+                        queue_light_bind_groups.in_set(RenderSet::Queue),
+                        queue_light_pipelines.in_set(RenderSet::Queue),
                     ),
                 );
         }

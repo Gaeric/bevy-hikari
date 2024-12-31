@@ -1,9 +1,8 @@
 use super::{
     GpuStandardMaterial, GpuStandardMaterialBuffer, GpuStandardMaterialOffset,
-    IntoStandardMaterial, MeshMaterialSystems,
+    MeshMaterialSystems,
 };
 use bevy::{
-    asset::HandleId,
     prelude::*,
     render::{
         render_resource::*,
@@ -28,7 +27,7 @@ impl Plugin for MaterialPlugin {
                 .add_systems(
                     Render,
                     prepare_material_assets
-                        .in_set(RenderSet::Prepare)
+                        .in_set(RenderSet::PrepareAssets)
                         .in_set(MeshMaterialSystems::PrepareAssets)
                         .after(MeshMaterialSystems::PrePrepareAssets),
                 );
@@ -37,19 +36,19 @@ impl Plugin for MaterialPlugin {
 }
 
 #[derive(Default)]
-pub struct GenericMaterialPlugin<M: IntoStandardMaterial>(PhantomData<M>);
-impl<M: IntoStandardMaterial> Plugin for GenericMaterialPlugin<M> {
+pub struct GenericMaterialPlugin(PhantomData<StandardMaterial>);
+impl Plugin for GenericMaterialPlugin {
     fn build(&self, app: &mut App) {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .add_systems(
                     ExtractSchedule,
-                    extract_material_assets::<M>.in_set(RenderSet::ExtractCommands),
+                    extract_material_assets.in_set(RenderSet::ExtractCommands),
                 )
                 .add_systems(
                     Render,
-                    prepare_generic_material_assets::<M>
-                        .in_set(RenderSet::Prepare)
+                    prepare_generic_material_assets
+                        .in_set(RenderSet::PrepareAssets)
                         .in_set(MeshMaterialSystems::PrePrepareAssets),
                 );
         }
@@ -63,61 +62,66 @@ pub struct MaterialRenderAssets {
 }
 
 #[derive(Default, Deref, DerefMut, Resource)]
-pub struct StandardMaterials(BTreeMap<HandleId, StandardMaterial>);
+pub struct StandardMaterials(BTreeMap<AssetId<StandardMaterial>, StandardMaterial>);
 
 #[derive(Default, Deref, DerefMut, Resource)]
 pub struct GpuStandardMaterials(
-    HashMap<HandleUntyped, (GpuStandardMaterial, GpuStandardMaterialOffset)>,
+    HashMap<AssetId<StandardMaterial>, (GpuStandardMaterial, GpuStandardMaterialOffset)>,
 );
 
 #[derive(Default, Resource)]
-pub struct ExtractedMaterials<M: IntoStandardMaterial> {
-    extracted: Vec<(Handle<M>, M)>,
-    removed: Vec<Handle<M>>,
+pub struct ExtractedMaterials {
+    extracted: Vec<(AssetId<StandardMaterial>, StandardMaterial)>,
+    removed: Vec<AssetId<StandardMaterial>>,
 }
 
-fn extract_material_assets<M: IntoStandardMaterial>(
+fn extract_material_assets(
     mut commands: Commands,
-    mut events: Extract<EventReader<AssetEvent<M>>>,
-    assets: Extract<Res<Assets<M>>>,
+    mut events: Extract<EventReader<AssetEvent<StandardMaterial>>>,
+    assets: Extract<Res<Assets<StandardMaterial>>>,
 ) {
     let mut changed_assets = HashSet::default();
     let mut removed = Vec::new();
+
     for event in events.read() {
         match event {
-            AssetEvent::Created { handle } | AssetEvent::Modified { handle } => {
-                changed_assets.insert(handle.clone_weak());
+            AssetEvent::Added { id } | AssetEvent::Modified { id } => {
+                changed_assets.insert(*id);
             }
-            AssetEvent::Removed { handle } => {
-                changed_assets.remove(handle);
-                removed.push(handle.clone_weak());
+            AssetEvent::Removed { id } => {
+                changed_assets.remove(id);
+                removed.push(*id);
             }
+            AssetEvent::LoadedWithDependencies { .. } => {}
         }
     }
 
     let mut extracted = Vec::new();
-    for handle in changed_assets.drain() {
-        if let Some(material) = assets.get(&handle) {
-            extracted.push((handle, material.clone()));
+    for id in changed_assets.drain() {
+        if let Some(asset) = assets.get(id) {
+            extracted.push((id, asset.clone()));
         }
     }
 
     commands.insert_resource(ExtractedMaterials { extracted, removed });
 }
 
-fn prepare_generic_material_assets<M: IntoStandardMaterial>(
-    mut extracted_assets: ResMut<ExtractedMaterials<M>>,
+fn prepare_generic_material_assets(
+    mut extracted_assets: ResMut<ExtractedMaterials>,
     mut materials: ResMut<StandardMaterials>,
     render_assets: ResMut<MaterialRenderAssets>,
 ) {
-    for handle in extracted_assets.removed.drain(..) {
-        materials.remove(&handle.id());
+    for id in extracted_assets.removed.drain(..) {
+        materials.remove(&id);
     }
 
     let render_assets = render_assets.into_inner();
-    for (handle, material) in extracted_assets.extracted.drain(..) {
-        let material = material.into_standard_material(render_assets);
-        materials.insert(handle.id(), material);
+    for (id, material) in extracted_assets.extracted.drain(..) {
+        if let Some(ref texture) = material.base_color_texture {
+            render_assets.textures.insert(texture.clone_weak());
+        }
+
+        materials.insert(id, material);
     }
 }
 
@@ -176,8 +180,8 @@ fn prepare_material_assets(
                 value: offset as u32,
             };
 
-            let handle = HandleUntyped::weak(*handle);
-            assets.insert(handle, (material, offset));
+            // let handle = HandleUntyped::weak(*handle);
+            assets.insert(*handle, (material, offset));
             material
         })
         .collect();

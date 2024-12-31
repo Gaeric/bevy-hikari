@@ -203,7 +203,7 @@ fn queue_overlay_mesh(
 ) {
     let draw_function = draw_functions.read().get_id::<DrawOverlay>().unwrap();
     for mut overlay_phase in &mut views {
-        let mesh_handle = QUAD_HANDLE.typed::<Mesh>();
+        let mesh_handle = QUAD_HANDLE;
         if let Some(mesh) = render_meshes.get(&mesh_handle) {
             let key = MeshPipelineKey::from_msaa_samples(msaa.samples())
                 | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);

@@ -13,8 +13,8 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugin(HikariPlugin::default())
-        .add_startup_system(setup)
+        .add_plugins(HikariPlugin::default())
+        .add_systems(Startup, setup)
         .run();
 }
 

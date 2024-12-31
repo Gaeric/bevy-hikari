@@ -4,7 +4,7 @@ use super::{
     MeshMaterialSystems,
 };
 use crate::{
-    mesh_material::{GpuInstance, GpuInstanceBuffer, GpuNode, GpuNodeBuffer, IntoStandardMaterial},
+    mesh_material::{GpuInstance, GpuInstanceBuffer, GpuNode, GpuNodeBuffer},
     transform::PreviousGlobalTransform,
 };
 use bevy::{
@@ -49,12 +49,12 @@ impl Plugin for InstancePlugin {
 }
 
 #[derive(Default)]
-pub struct GenericInstancePlugin<M: IntoStandardMaterial>(PhantomData<M>);
-impl<M: IntoStandardMaterial> Plugin for GenericInstancePlugin<M> {
+pub struct GenericInstancePlugin(PhantomData<StandardMaterial>);
+impl Plugin for GenericInstancePlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<InstanceEvent<M>>().add_systems(
+        app.add_event::<InstanceEvent>().add_systems(
             PostUpdate,
-            instance_event_system::<M>
+            instance_event_system
                 .after(TransformSystem::TransformPropagate)
                 .after(VisibilitySystems::CalculateBounds),
         );
@@ -63,11 +63,11 @@ impl<M: IntoStandardMaterial> Plugin for GenericInstancePlugin<M> {
             render_app
                 .add_systems(
                     ExtractSchedule,
-                    extract_instances::<M>.in_set(RenderSet::ExtractCommands),
+                    extract_instances.in_set(RenderSet::ExtractCommands),
                 )
                 .add_systems(
                     Render,
-                    prepare_generic_instances::<M>
+                    prepare_generic_instances
                         .in_set(RenderSet::Prepare)
                         .in_set(MeshMaterialSystems::PrepareInstances)
                         .after(MeshMaterialSystems::PrepareAssets),
@@ -124,24 +124,27 @@ fn extract_mesh_transforms(
 pub struct GpuInstances(BTreeMap<Entity, GpuInstance>);
 
 #[derive(Event)]
-pub enum InstanceEvent<M: IntoStandardMaterial> {
-    Created(Entity, Handle<Mesh>, Handle<M>),
-    Modified(Entity, Handle<Mesh>, Handle<M>),
+pub enum InstanceEvent {
+    Created(Entity, Handle<Mesh>, Handle<StandardMaterial>),
+    Modified(Entity, Handle<Mesh>, Handle<StandardMaterial>),
     Removed(Entity),
 }
 
 #[allow(clippy::type_complexity)]
-fn instance_event_system<M: IntoStandardMaterial>(
-    mut events: EventWriter<InstanceEvent<M>>,
+fn instance_event_system(
+    mut events: EventWriter<InstanceEvent>,
     mut removed: RemovedComponents<Handle<Mesh>>,
     mut set: ParamSet<(
-        Query<(Entity, &Handle<Mesh>, &Handle<M>), Or<(Added<Handle<Mesh>>, Added<Handle<M>>)>>,
         Query<
-            (Entity, &Handle<Mesh>, &Handle<M>),
+            (Entity, &Handle<Mesh>, &Handle<StandardMaterial>),
+            Or<(Added<Handle<Mesh>>, Added<Handle<StandardMaterial>>)>,
+        >,
+        Query<
+            (Entity, &Handle<Mesh>, &Handle<StandardMaterial>),
             Or<(
                 Changed<Transform>,
                 Changed<Handle<Mesh>>,
-                Changed<Handle<M>>,
+                Changed<Handle<StandardMaterial>>,
             )>,
         >,
     )>,
@@ -167,14 +170,20 @@ fn instance_event_system<M: IntoStandardMaterial>(
 
 #[allow(clippy::type_complexity)]
 #[derive(Resource)]
-pub struct ExtractedInstances<M: IntoStandardMaterial> {
-    extracted: Vec<(Entity, Aabb, GlobalTransform, Handle<Mesh>, Handle<M>)>,
+pub struct ExtractedInstances {
+    extracted: Vec<(
+        Entity,
+        Aabb,
+        GlobalTransform,
+        AssetId<Mesh>,
+        Handle<StandardMaterial>,
+    )>,
     removed: Vec<Entity>,
 }
 
-fn extract_instances<M: IntoStandardMaterial>(
+fn extract_instances(
     mut commands: Commands,
-    mut events: Extract<EventReader<InstanceEvent<M>>>,
+    mut events: Extract<EventReader<InstanceEvent>>,
     query: Extract<Query<(&Aabb, &GlobalTransform)>>,
 ) {
     let mut extracted = vec![];
@@ -189,7 +198,7 @@ fn extract_instances<M: IntoStandardMaterial>(
                         *entity,
                         aabb.clone(),
                         *transform,
-                        mesh.clone_weak(),
+                        mesh.id(),
                         material.clone_weak(),
                     ));
                 }
@@ -201,8 +210,8 @@ fn extract_instances<M: IntoStandardMaterial>(
     commands.insert_resource(ExtractedInstances { extracted, removed });
 }
 
-fn prepare_generic_instances<M: IntoStandardMaterial>(
-    mut extracted_instances: ResMut<ExtractedInstances<M>>,
+fn prepare_generic_instances(
+    mut extracted_instances: ResMut<ExtractedInstances>,
     mut instances: ResMut<GpuInstances>,
     meshes: Res<GpuMeshes>,
     materials: Res<GpuStandardMaterials>,
@@ -216,7 +225,7 @@ fn prepare_generic_instances<M: IntoStandardMaterial>(
         instances.remove(&removed);
     }
     for (entity, aabb, transform, mesh, material) in extracted_instances.extracted.drain(..) {
-        let material = UntypedHandle::Weak(material.id().into());
+        let material = material.id();
         let transform = transform.compute_matrix();
         let center = transform.transform_point3a(aabb.center);
         let vertices: Vec<_> = (0..8i32)
