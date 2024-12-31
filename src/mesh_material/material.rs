@@ -1,6 +1,5 @@
 use super::{
-    GpuStandardMaterial, GpuStandardMaterialBuffer, GpuStandardMaterialOffset,
-    IntoStandardMaterial, MeshMaterialSystems,
+    GpuStandardMaterial, GpuStandardMaterialBuffer, GpuStandardMaterialOffset, MeshMaterialSystems,
 };
 use bevy::{
     asset::HandleId,
@@ -37,18 +36,18 @@ impl Plugin for MaterialPlugin {
 }
 
 #[derive(Default)]
-pub struct GenericMaterialPlugin<M: IntoStandardMaterial>(PhantomData<M>);
-impl<M: IntoStandardMaterial> Plugin for GenericMaterialPlugin<M> {
+pub struct GenericMaterialPlugin(PhantomData<StandardMaterial>);
+impl Plugin for GenericMaterialPlugin {
     fn build(&self, app: &mut App) {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .add_systems(
                     ExtractSchedule,
-                    extract_material_assets::<M>.in_set(RenderSet::ExtractCommands),
+                    extract_material_assets.in_set(RenderSet::ExtractCommands),
                 )
                 .add_systems(
                     Render,
-                    prepare_generic_material_assets::<M>
+                    prepare_generic_material_assets
                         .in_set(RenderSet::Prepare)
                         .in_set(MeshMaterialSystems::PrePrepareAssets),
                 );
@@ -71,15 +70,15 @@ pub struct GpuStandardMaterials(
 );
 
 #[derive(Default, Resource)]
-pub struct ExtractedMaterials<M: IntoStandardMaterial> {
-    extracted: Vec<(Handle<M>, M)>,
-    removed: Vec<Handle<M>>,
+pub struct ExtractedMaterials {
+    extracted: Vec<(Handle<StandardMaterial>, StandardMaterial)>,
+    removed: Vec<Handle<StandardMaterial>>,
 }
 
-fn extract_material_assets<M: IntoStandardMaterial>(
+fn extract_material_assets(
     mut commands: Commands,
-    mut events: Extract<EventReader<AssetEvent<M>>>,
-    assets: Extract<Res<Assets<M>>>,
+    mut events: Extract<EventReader<AssetEvent<StandardMaterial>>>,
+    assets: Extract<Res<Assets<StandardMaterial>>>,
 ) {
     let mut changed_assets = HashSet::default();
     let mut removed = Vec::new();
@@ -105,8 +104,8 @@ fn extract_material_assets<M: IntoStandardMaterial>(
     commands.insert_resource(ExtractedMaterials { extracted, removed });
 }
 
-fn prepare_generic_material_assets<M: IntoStandardMaterial>(
-    mut extracted_assets: ResMut<ExtractedMaterials<M>>,
+fn prepare_generic_material_assets(
+    mut extracted_assets: ResMut<ExtractedMaterials>,
     mut materials: ResMut<StandardMaterials>,
     render_assets: ResMut<MaterialRenderAssets>,
 ) {
@@ -116,7 +115,11 @@ fn prepare_generic_material_assets<M: IntoStandardMaterial>(
 
     let render_assets = render_assets.into_inner();
     for (handle, material) in extracted_assets.extracted.drain(..) {
-        let material = material.into_standard_material(render_assets);
+        // let material = material.into_standard_material(render_assets);
+
+        if let Some(ref image) = material.base_color_texture {
+            render_assets.textures.insert(image.clone());
+        }
         materials.insert(handle.id(), material);
     }
 }
