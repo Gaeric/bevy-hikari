@@ -1,11 +1,10 @@
-#import bevy_pbr::mesh_functions mesh_position_local_to_world
-#import bevy_pbr::mesh_functions mesh_normal_local_to_world
+#import bevy_pbr::mesh_functions::{get_model_matrix, mesh_position_local_to_world, mesh_normal_local_to_world}
 #import bevy_pbr::mesh_types
 #import bevy_pbr::mesh_functions
+#import bevy_pbr::mesh_bindings::mesh
 
-#import bevy_render::view
-
-#import bevy_pbr::mesh_bindings       mesh
+#import bevy_render::view::View
+#import bevy_render::instance_index::get_instance_index
 
 struct PreviousView {
     view_proj: mat4x4<f32>,
@@ -23,7 +22,7 @@ struct InstanceIndex {
 };
 
 @group(0) @binding(0)
-var<uniform> view: bevy_render::view::View;
+var<uniform> view: View;
 @group(0) @binding(1)
 var<uniform> previous_view: PreviousView;
 
@@ -36,6 +35,7 @@ var<uniform> previous_mesh: PreviousMesh;
 var<uniform> instance_index: InstanceIndex;
 
 struct Vertex {
+    @builtin(instance_index) instance_index: u32,
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
@@ -51,13 +51,14 @@ struct VertexOutput {
 
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
-    let model = mesh.model;
-    let vertex_position = vec4<f32>(vertex.position, 1.0);
-
     var out: VertexOutput;
-    out.world_position = mesh_position_local_to_world(model, vertex_position);
-    out.previous_world_position = mesh_position_local_to_world(previous_mesh.model, vertex_position);
-    out.world_normal = mesh_normal_local_to_world(vertex.normal);
+
+    out.world_position = mesh_position_local_to_world(
+        get_model_matrix(vertex.instance_index),
+        vec4<f32>(vertex.position, 1.0),
+    );
+    out.previous_world_position = mesh_position_local_to_world(previous_mesh.model, vec4<f32>(vertex.position, 1.0));
+    out.world_normal = mesh_normal_local_to_world(vertex.normal, get_instance_index(vertex.instance_index));
     out.clip_position = view.view_proj * out.world_position;
     out.uv = vertex.uv;
 

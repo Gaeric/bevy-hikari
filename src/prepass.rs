@@ -47,6 +47,7 @@ impl Plugin for PrepassPlugin {
                 // [0.8] refer Opaque3d
                 .init_resource::<DrawFunctions<Prepass>>()
                 .init_resource::<SpecializedMeshPipelines<PrepassPipeline>>()
+                .init_resource::<PrepassBindGroup>()
                 .add_render_command::<Prepass, DrawPrepass>()
                 .add_systems(
                     ExtractSchedule,
@@ -57,7 +58,7 @@ impl Plugin for PrepassPlugin {
                     (
                         prepare_prepass_targets.in_set(RenderSet::Prepare),
                         queue_prepass_meshes.in_set(RenderSet::Queue),
-                        queue_prepass_bind_group.in_set(RenderSet::Queue),
+                        prepare_prepass_bind_group.in_set(RenderSet::PrepareBindGroups),
                         sort_phase_system::<Prepass>.in_set(RenderSet::PhaseSort),
                     ),
                 );
@@ -113,7 +114,8 @@ impl FromWorld for PrepassPipeline {
                     binding: 0,
                     visibility: ShaderStages::VERTEX_FRAGMENT,
                     ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
+                        // ty: BufferBindingType::Uniform,
+                        ty: BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: true,
                         min_binding_size: Some(MeshUniform::min_size()),
                     },
@@ -372,16 +374,16 @@ fn queue_prepass_meshes(
     }
 }
 
-#[derive(Resource, Debug)]
+// [0.12] refer PrepassViewBindGroup
+#[derive(Resource, Debug, Default)]
 pub struct PrepassBindGroup {
-    pub view: BindGroup,
-    pub mesh: BindGroup,
+    pub view: Option<BindGroup>,
+    pub mesh: Option<BindGroup>,
 }
 
-// [0.12] prepare_mesh_bind_group
+// [0.12] refer prepare_mesh_bind_group
 #[allow(clippy::too_many_arguments)]
-fn queue_prepass_bind_group(
-    mut commands: Commands,
+fn prepare_prepass_bind_group(
     prepass_pipeline: Res<PrepassPipeline>,
     render_device: Res<RenderDevice>,
     mesh_uniforms: Res<GpuArrayBuffer<MeshUniform>>,
@@ -389,7 +391,11 @@ fn queue_prepass_bind_group(
     instance_render_assets: Res<InstanceRenderAssets>,
     view_uniforms: Res<ViewUniforms>,
     previous_view_uniforms: Res<PreviousViewUniforms>,
+    mut prepass_bind_group: ResMut<PrepassBindGroup>,
 ) {
+    trace!("queue_prepass_bind_group");
+    trace!("mesh layout: {:?}", prepass_pipeline.mesh_layout);
+
     if let (
         Some(view_binding),
         Some(previous_view_binding),
@@ -435,7 +441,10 @@ fn queue_prepass_bind_group(
                 },
             ],
         );
-        commands.insert_resource(PrepassBindGroup { view, mesh });
+        info!("mesh bindgroup: {:?}", mesh);
+
+        prepass_bind_group.view = Some(view);
+        prepass_bind_group.mesh = Some(mesh);
     }
 }
 
@@ -502,6 +511,7 @@ type DrawPrepass = (
     DrawMesh,
 );
 
+// [0.12] refer PrepassViewBindGroup
 pub struct SetPrepassViewBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassViewBindGroup<I> {
     type Param = SRes<PrepassBindGroup>;
@@ -518,9 +528,11 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassViewBindGroup<
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
+        let prepass_bind_group = bind_group.into_inner();
+
         pass.set_bind_group(
             I,
-            &bind_group.into_inner().view,
+            &prepass_bind_group.view.as_ref().unwrap(),
             &[view_uniform.offset, previous_view_uniform.offset],
         );
 
@@ -550,6 +562,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
         (bind_group, mesh_instances): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
+        let prepass_bind_group = bind_group.into_inner();
         let mesh_instances = mesh_instances.into_inner();
         let entity = &item.entity();
 
@@ -563,10 +576,9 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
             dynamic_offsets[0] = dynamic_offset.get();
         }
 
-        
         pass.set_bind_group(
             I,
-            &bind_group.into_inner().mesh,
+            &prepass_bind_group.mesh.as_ref().unwrap(),
             &[
                 dynamic_offsets[0],
                 previous_mesh_uniform.index(),

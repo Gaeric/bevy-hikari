@@ -326,7 +326,7 @@ impl ViewNode for OverlayPassNode {
         (camera, overlay_phase, camera_3d, target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        let view_entity = graph.view_entity();
+        info!("overlay pass node run");
 
         // [0.8] refer MainPass3dNode::run() main_opaque_pass_3d section
         {
@@ -349,13 +349,17 @@ impl ViewNode for OverlayPassNode {
             if let Some(viewport) = camera.viewport.as_ref() {
                 render_pass.set_camera_viewport(viewport);
             }
-            trace!("overlay phase render now");
             for item in overlay_phase.items.iter() {
-                trace!("overlay phase item is {:?}", item.entity());
+                info!("overlay phase item is {:?}", item.entity());
             }
+
+            let view_entity = graph.view_entity();
+            info!("overlay phase view_entity: {:?}", view_entity);
 
             overlay_phase.render(&mut render_pass, world, view_entity);
         }
+
+        info!("finish overplay node run.");
 
         Ok(())
     }

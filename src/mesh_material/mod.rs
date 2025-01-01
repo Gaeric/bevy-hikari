@@ -408,7 +408,7 @@ fn prepare_texture_bind_group_layout(
     render_device: Res<RenderDevice>,
     materials: Res<MaterialRenderAssets>,
 ) {
-    error!("prepare texture bind group layout");
+    trace!("prepare texture bind group layout");
 
     let count = materials.textures.len();
     let layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
