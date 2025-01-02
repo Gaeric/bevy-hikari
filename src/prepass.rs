@@ -441,7 +441,7 @@ fn prepare_prepass_bind_group(
                 },
             ],
         );
-        info!("mesh bindgroup: {:?}", mesh);
+        trace!("mesh bindgroup: {:?}", mesh);
 
         prepass_bind_group.view = Some(view);
         prepass_bind_group.mesh = Some(mesh);
@@ -654,13 +654,13 @@ impl ViewNode for PrepassNode {
                 render_pass.set_camera_viewport(viewport);
             }
 
-            info!("prepass phase render now");
+            trace!("prepass phase render now");
             for item in prepass_phase.items.iter() {
-                info!("prepass phase item is {:?}", item.entity());
+                trace!("prepass phase item is {:?}", item.entity());
             }
 
             let view_entity = graph.view_entity();
-            info!("prepass phase view_entity: {:?}", view_entity);
+            trace!("prepass phase view_entity: {:?}", view_entity);
 
             prepass_phase.render(&mut render_pass, world, view_entity);
         }

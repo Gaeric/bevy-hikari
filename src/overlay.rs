@@ -66,6 +66,11 @@ pub struct OverlayPipeline {
     pub overlay_layout: BindGroupLayout,
 }
 
+#[derive(Default, Resource)]
+pub struct OverlayBindGroup {
+    bind_group: Option<BindGroup>,
+}
+
 impl FromWorld for OverlayPipeline {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
@@ -163,11 +168,6 @@ fn extract_overlay_camera_phases(
     }
 }
 
-#[derive(Default, Resource)]
-pub struct OverlayBindGroup {
-    bind_group: Option<BindGroup>,
-}
-
 fn prepare_overlay_bind_group(
     render_device: Res<RenderDevice>,
     pipeline: Res<OverlayPipeline>,
@@ -175,7 +175,7 @@ fn prepare_overlay_bind_group(
     mut overlay_bind_group: ResMut<OverlayBindGroup>,
 ) {
     for (entity, target) in &query {
-        info!("over bind group entity is {:?}", entity);
+        trace!("over bind group entity is {:?}", entity);
         let bind_group = render_device.create_bind_group(
             None,
             &pipeline.overlay_layout,
@@ -307,7 +307,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOverlayBindGroup<I> {
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let overlay_bind_group = bind_group.into_inner();
-        info!("render overlay");
+        trace!("render overlay");
         // todo! sometimes bindgroup is None
         pass.set_bind_group(I, overlay_bind_group.bind_group.as_ref().unwrap(), &[]);
         RenderCommandResult::Success
@@ -332,7 +332,7 @@ impl ViewNode for OverlayPassNode {
         (camera, overlay_phase, camera_3d, target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        info!("overlay pass node run");
+        trace!("overlay pass node run");
 
         // [0.8] refer MainPass3dNode::run() main_opaque_pass_3d section
         {
@@ -356,16 +356,16 @@ impl ViewNode for OverlayPassNode {
                 render_pass.set_camera_viewport(viewport);
             }
             for item in overlay_phase.items.iter() {
-                info!("overlay phase item is {:?}", item.entity());
+                trace!("overlay phase item is {:?}", item.entity());
             }
 
             let view_entity = graph.view_entity();
-            info!("overlay phase view_entity: {:?}", view_entity);
+            trace!("overlay phase view_entity: {:?}", view_entity);
 
             overlay_phase.render(&mut render_pass, world, view_entity);
         }
 
-        info!("finish overplay node run.");
+        trace!("finish overplay node run.");
 
         Ok(())
     }
