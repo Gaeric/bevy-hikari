@@ -1,7 +1,5 @@
-use std::any::TypeId;
-
 use bevy::{
-    asset::{load_internal_asset, UntypedAssetId},
+    asset::load_internal_asset,
     core_pipeline::upscaling::UpscalingNode,
     prelude::*,
     render::{
@@ -9,7 +7,6 @@ use bevy::{
         render_graph::{RenderGraphApp, ViewNodeRunner},
         RenderApp,
     },
-    utils::Uuid,
 };
 
 use light::{LightPassNode, LightPlugin};
@@ -37,6 +34,7 @@ pub mod graph {
         pub const LIGHT_PASS: &str = "light_direct_pass";
         pub const OVERLAY_PASS: &str = "overlay_pass";
         pub const UPSCALING: &str = "upscaling";
+        pub const END_MAIN_PASS_POST_PROCESSING: &str = "end_main_pass_post_processing";
     }
 }
 
@@ -52,10 +50,6 @@ pub const LIGHT_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(965731928
 pub const OVERLAY_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(10969344919103020615);
 
 pub const QUAD_HANDLE: Handle<Mesh> = Handle::weak_from_u128(4740146776519512271);
-// pub const QUAD_HANDLE: UntypedHandle = UntypedHandle::Weak(UntypedAssetId::Uuid {
-//     type_id: TypeId::of::<Mesh>(),
-//     uuid: Uuid::from_u128(4740146776519512271),
-// });
 
 pub struct HikariPlugin {
     noise_folder: String,

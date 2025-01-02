@@ -609,9 +609,6 @@ impl ViewNode for PrepassNode {
         (camera, prepass_phase, camera_3d, target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        let view_entity = graph.view_entity();
-
-        trace!("entity is {:?}", view_entity);
         {
             // let _main_prepass_span = info_span!("main_prepass").entered();
             let ops = Operations {
@@ -657,10 +654,13 @@ impl ViewNode for PrepassNode {
                 render_pass.set_camera_viewport(viewport);
             }
 
-            trace!("prepass phase render now");
+            info!("prepass phase render now");
             for item in prepass_phase.items.iter() {
-                trace!("prepass phase item is {:?}", item.entity());
+                info!("prepass phase item is {:?}", item.entity());
             }
+
+            let view_entity = graph.view_entity();
+            info!("prepass phase view_entity: {:?}", view_entity);
 
             prepass_phase.render(&mut render_pass, world, view_entity);
         }

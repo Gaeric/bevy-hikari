@@ -3,7 +3,7 @@ use std::ops::Range;
 use crate::{light::LightPassTarget, OVERLAY_SHADER_HANDLE, QUAD_HANDLE};
 use bevy::{
     core_pipeline::clear_color::ClearColorConfig,
-    ecs::system::{lifetimeless::Read, SystemParamItem},
+    ecs::system::{lifetimeless::SRes, SystemParamItem},
     pbr::{DrawMesh, MeshPipelineKey},
     prelude::{shape::Quad, *},
     render::{
@@ -34,6 +34,7 @@ impl Plugin for OverlayPlugin {
             render_app
                 .init_resource::<DrawFunctions<Overlay>>()
                 .init_resource::<SpecializedMeshPipelines<OverlayPipeline>>()
+                .init_resource::<OverlayBindGroup>()
                 .add_render_command::<Overlay, DrawOverlay>()
                 .add_systems(
                     ExtractSchedule,
@@ -42,7 +43,7 @@ impl Plugin for OverlayPlugin {
                 .add_systems(
                     Render,
                     (
-                        queue_overlay_bind_groups.in_set(RenderSet::Queue),
+                        prepare_overlay_bind_group.in_set(RenderSet::PrepareBindGroups),
                         queue_overlay_mesh.in_set(RenderSet::Queue),
                     ),
                 );
@@ -162,16 +163,19 @@ fn extract_overlay_camera_phases(
     }
 }
 
-#[derive(Component, Resource)]
-pub struct OverlayBindGroup(pub BindGroup);
+#[derive(Default, Resource)]
+pub struct OverlayBindGroup {
+    bind_group: Option<BindGroup>,
+}
 
-fn queue_overlay_bind_groups(
-    mut commands: Commands,
+fn prepare_overlay_bind_group(
     render_device: Res<RenderDevice>,
     pipeline: Res<OverlayPipeline>,
     query: Query<(Entity, &LightPassTarget)>,
+    mut overlay_bind_group: ResMut<OverlayBindGroup>,
 ) {
     for (entity, target) in &query {
+        info!("over bind group entity is {:?}", entity);
         let bind_group = render_device.create_bind_group(
             None,
             &pipeline.overlay_layout,
@@ -186,7 +190,7 @@ fn queue_overlay_bind_groups(
                 },
             ],
         );
-        commands.entity(entity).insert(OverlayBindGroup(bind_group));
+        overlay_bind_group.bind_group = Some(bind_group);
     }
 }
 
@@ -290,20 +294,22 @@ type DrawOverlay = (SetItemPipeline, SetOverlayBindGroup<0>, DrawMesh);
 
 pub struct SetOverlayBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOverlayBindGroup<I> {
-    type Param = ();
-    type ViewWorldQuery = Read<OverlayBindGroup>;
+    type Param = SRes<OverlayBindGroup>;
+    type ViewWorldQuery = ();
     type ItemWorldQuery = ();
 
     #[inline]
     fn render<'w>(
         _item: &P,
-        bind_group: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
-        _: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
-        _param: SystemParamItem<'w, '_, Self::Param>,
+        _view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
+        _entity: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
+        bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        trace!("render overlay");
-        pass.set_bind_group(I, &bind_group.0, &[]);
+        let overlay_bind_group = bind_group.into_inner();
+        info!("render overlay");
+        // todo! sometimes bindgroup is None
+        pass.set_bind_group(I, overlay_bind_group.bind_group.as_ref().unwrap(), &[]);
         RenderCommandResult::Success
     }
 }

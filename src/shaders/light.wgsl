@@ -3,21 +3,21 @@
 
 #import bevy_hikari::mesh_material_bindings
 #import bevy_hikari::overlay
-#import bevy_pbr::utils               PI
+#import bevy_pbr::utils::PI
 
-#import bevy_pbr::mesh_view_bindings  lights
-#import bevy_pbr::mesh_view_bindings  view
-#import bevy_pbr::mesh_view_types DirectionalLight
+#import bevy_pbr::mesh_view_bindings::lights
+#import bevy_pbr::mesh_view_bindings::view
+#import bevy_pbr::mesh_view_types::DirectionalLight
 
-#import bevy_hikari::mesh_material_types Instance
-#import bevy_hikari::mesh_material_types Slice
-#import bevy_hikari::mesh_material_bindings asset_node_buffer
-#import bevy_hikari::mesh_material_bindings primitive_buffer
-#import bevy_hikari::mesh_material_bindings vertex_buffer
-#import bevy_hikari::mesh_material_bindings instance_buffer
-#import bevy_hikari::mesh_material_bindings instance_node_buffer
-#import bevy_hikari::mesh_material_bindings material_buffer
-#import bevy_hikari::overlay luminance
+#import bevy_hikari::mesh_material_types::Instance
+#import bevy_hikari::mesh_material_types::Slice
+#import bevy_hikari::mesh_material_bindings::asset_node_buffer
+#import bevy_hikari::mesh_material_bindings::primitive_buffer
+#import bevy_hikari::mesh_material_bindings::vertex_buffer
+#import bevy_hikari::mesh_material_bindings::instance_buffer
+#import bevy_hikari::mesh_material_bindings::instance_node_buffer
+#import bevy_hikari::mesh_material_bindings::material_buffer
+#import bevy_hikari::overlay::luminance
 
 #import bevy_hikari::deferred_bindings as deferred
 
