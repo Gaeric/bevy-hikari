@@ -26,16 +26,22 @@ use bevy::{
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
         texture::{GpuImage, TextureCache},
-        view::{ExtractedView, ViewUniform, ViewUniformOffset, ViewUniforms, VisibleEntities},
+        view::{
+            ExtractedView, ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
+            VisibleEntities,
+        },
         Extract, Render, RenderApp, RenderSet,
     },
     utils::FloatOrd,
 };
 
+pub const DEBUG_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
+
 pub const POSITION_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
 pub const NORMAL_FORMAT: TextureFormat = TextureFormat::Rgba8Snorm;
 pub const INSTANCE_MATERIAL_FORMAT: TextureFormat = TextureFormat::Rg16Uint;
-pub const VELOCITY_UV_FORMAT: TextureFormat = TextureFormat::Rgba16Snorm;
+pub const VELOCITY_UV_FORMAT: TextureFormat = DEBUG_FORMAT;
+// pub const VELOCITY_UV_FORMAT: TextureFormat = TextureFormat::Rgba16Snorm;
 
 pub struct PrepassPlugin;
 impl Plugin for PrepassPlugin {
@@ -549,13 +555,16 @@ impl ViewNode for PrepassNode {
         &'static RenderPhase<Prepass>,
         &'static Camera3d,
         &'static PrepassTarget,
+        &'static ViewTarget,
     );
 
     fn run(
         &self,
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (camera, prepass_phase, camera_3d, target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
+        (camera, prepass_phase, camera_3d, target, view_target): bevy::ecs::query::QueryItem<
+            Self::ViewQuery,
+        >,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let view_entity = graph.view_entity();
@@ -572,21 +581,25 @@ impl ViewNode for PrepassNode {
                 color_attachments: &[
                     Some(RenderPassColorAttachment {
                         view: &target.position.texture_view,
+                        // view: &view_target.out_texture(),
                         resolve_target: None,
                         ops,
                     }),
                     Some(RenderPassColorAttachment {
                         view: &target.normal.texture_view,
+                        // view: &view_target.out_texture(),
                         resolve_target: None,
                         ops,
                     }),
                     Some(RenderPassColorAttachment {
                         view: &target.instance_material.texture_view,
+                        // view: &view_target.out_texture(),
                         resolve_target: None,
                         ops,
                     }),
                     Some(RenderPassColorAttachment {
-                        view: &target.velocity_uv.texture_view,
+                        // view: &target.velocity_uv.texture_view,
+                        view: &view_target.out_texture(),
                         resolve_target: None,
                         ops,
                     }),
