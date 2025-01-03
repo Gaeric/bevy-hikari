@@ -28,11 +28,16 @@ use bevy::{
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
         texture::{GpuImage, TextureCache},
-        view::{ExtractedView, ViewUniform, ViewUniformOffset, ViewUniforms, VisibleEntities},
+        view::{
+            ExtractedView, ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
+            VisibleEntities,
+        },
         Extract, Render, RenderApp, RenderSet,
     },
     utils::{nonmax::NonMaxU32, FloatOrd},
 };
+
+pub const DEBUG_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
 
 pub const POSITION_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
 pub const NORMAL_FORMAT: TextureFormat = TextureFormat::Rgba8Snorm;
@@ -186,7 +191,8 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                 entry_point: "fragment".into(),
                 targets: vec![
                     Some(ColorTargetState {
-                        format: POSITION_FORMAT,
+                        // format: POSITION_FORMAT,
+                        format: DEBUG_FORMAT,
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     }),
@@ -337,6 +343,7 @@ fn queue_prepass_meshes(
     render_mesh_instances: Res<RenderMeshInstances>,
     mut views: Query<(&ExtractedView, &VisibleEntities, &mut RenderPhase<Prepass>)>,
 ) {
+    info!("queue_prepass_meshes in Render Queue.");
     let draw_function = draw_functions.read().get_id::<DrawPrepass>().unwrap();
     for (view, visible_entities, mut prepass_phase) in &mut views {
         let rangefinder = view.rangefinder3d();
@@ -361,6 +368,9 @@ fn queue_prepass_meshes(
                     return;
                 }
             };
+
+            info!("queue_prepass_meshes add prepass in Render Queue.");
+
             prepass_phase.add(Prepass {
                 distance: rangefinder
                     .distance_translation(&mesh_instance.transforms.transform.translation),
@@ -600,13 +610,16 @@ impl ViewNode for PrepassNode {
         &'static RenderPhase<Prepass>,
         &'static Camera3d,
         &'static PrepassTarget,
+        &'static ViewTarget,
     );
 
     fn run(
         &self,
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (camera, prepass_phase, camera_3d, target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
+        (camera, prepass_phase, camera_3d, target, view_target): bevy::ecs::query::QueryItem<
+            Self::ViewQuery,
+        >,
         world: &World,
     ) -> Result<(), NodeRunError> {
         {
@@ -619,7 +632,8 @@ impl ViewNode for PrepassNode {
                 label: Some("main_prepass"),
                 color_attachments: &[
                     Some(RenderPassColorAttachment {
-                        view: &target.position.texture_view,
+                        view: &view_target.out_texture(),
+                        // view: &target.position.texture_view,
                         resolve_target: None,
                         ops,
                     }),

@@ -145,26 +145,27 @@ impl Plugin for HikariPlugin {
         render_app
             .add_render_sub_graph(graph::NAME)
             .add_render_graph_node::<ViewNodeRunner<PrepassNode>>(graph::NAME, graph::node::PREPASS)
-            .add_render_graph_node::<ViewNodeRunner<LightPassNode>>(
-                graph::NAME,
-                graph::node::LIGHT_PASS,
-            )
-            .add_render_graph_node::<ViewNodeRunner<OverlayPassNode>>(
-                graph::NAME,
-                graph::node::OVERLAY_PASS,
-            )
-            .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(
-                graph::NAME,
-                graph::node::UPSCALING,
-            );
+            // .add_render_graph_node::<ViewNodeRunner<LightPassNode>>(
+            //     graph::NAME,
+            //     graph::node::LIGHT_PASS,
+            // )
+            // .add_render_graph_node::<ViewNodeRunner<OverlayPassNode>>(
+            //     graph::NAME,
+            //     graph::node::OVERLAY_PASS,
+            // )
+            // .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(
+            //     graph::NAME,
+            //     graph::node::UPSCALING,
+            // )
+;
 
         render_app.add_render_graph_edges(
             graph::NAME,
             &[
                 graph::node::PREPASS,
-                graph::node::LIGHT_PASS,
-                graph::node::OVERLAY_PASS,
-                graph::node::UPSCALING,
+                // graph::node::LIGHT_PASS,
+                // graph::node::OVERLAY_PASS,
+                // graph::node::UPSCALING,
             ],
         );
     }
