@@ -40,8 +40,7 @@ pub const DEBUG_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
 pub const POSITION_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
 pub const NORMAL_FORMAT: TextureFormat = TextureFormat::Rgba8Snorm;
 pub const INSTANCE_MATERIAL_FORMAT: TextureFormat = TextureFormat::Rg16Uint;
-pub const VELOCITY_UV_FORMAT: TextureFormat = DEBUG_FORMAT;
-// pub const VELOCITY_UV_FORMAT: TextureFormat = TextureFormat::Rgba16Snorm;
+pub const VELOCITY_UV_FORMAT: TextureFormat = TextureFormat::Rgba16Snorm;
 
 pub struct PrepassPlugin;
 impl Plugin for PrepassPlugin {
@@ -188,7 +187,8 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                 entry_point: "fragment".into(),
                 targets: vec![
                     Some(ColorTargetState {
-                        format: POSITION_FORMAT,
+                        // format: POSITION_FORMAT,
+                        format: DEBUG_FORMAT,
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     }),
@@ -348,6 +348,9 @@ fn queue_prepass_meshes(
             &MeshUniform,
             &DynamicInstanceIndex,
         )| {
+            debug!("entity is {:?}", entity);
+            debug!("mesh handle: {:?}", mesh_handle);
+
             if let Some(mesh) = render_meshes.get(mesh_handle) {
                 let key = MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
                 let pipeline_id =
@@ -359,8 +362,12 @@ fn queue_prepass_meshes(
                         return;
                     }
                 };
+                let distance = rangefinder.distance(&mesh_uniform.transform);
+
+                info!("mesh : {mesh:?}, distance is {distance}");
+
                 prepass_phase.add(Prepass {
-                    distance: rangefinder.distance(&mesh_uniform.transform),
+                    distance,
                     entity,
                     pipeline: pipeline_id,
                     draw_function,
@@ -531,11 +538,14 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
+        info!("mesh_uniform index is {:?}, instance_index is {:?}", mesh_uniform.index(), instance_index.0);
+
         pass.set_bind_group(
             I,
             &bind_group.into_inner().mesh,
             &[
                 mesh_uniform.index(),
+                // 0,
                 previous_mesh_uniform.index(),
                 instance_index.0,
             ],
@@ -580,8 +590,8 @@ impl ViewNode for PrepassNode {
                 label: Some("main_prepass"),
                 color_attachments: &[
                     Some(RenderPassColorAttachment {
-                        view: &target.position.texture_view,
-                        // view: &view_target.out_texture(),
+                        // view: &target.position.texture_view,
+                        view: &view_target.out_texture(),
                         resolve_target: None,
                         ops,
                     }),
@@ -598,8 +608,8 @@ impl ViewNode for PrepassNode {
                         ops,
                     }),
                     Some(RenderPassColorAttachment {
-                        // view: &target.velocity_uv.texture_view,
-                        view: &view_target.out_texture(),
+                        view: &target.velocity_uv.texture_view,
+                        // view: &view_target.out_texture(),
                         resolve_target: None,
                         ops,
                     }),
