@@ -77,8 +77,8 @@ impl Plugin for PrepassPlugin {
 
 #[derive(Resource)]
 pub struct PrepassPipeline {
-    pub view_layout: BindGroupLayout,
-    pub mesh_layout: BindGroupLayout,
+    // pub view_layout: BindGroupLayout,
+    // pub mesh_layout: BindGroupLayout,
     pub per_object_buffer_batch_size: Option<u32>,
 }
 
@@ -87,72 +87,72 @@ impl FromWorld for PrepassPipeline {
         let render_device = world.resource::<RenderDevice>();
         let mesh_pipeline = world.resource::<MeshPipeline>();
 
-        let view_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(ViewUniform::min_size()),
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(PreviousViewUniform::min_size()),
-                    },
-                    count: None,
-                },
-            ],
-        });
+        // let view_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        //     label: None,
+        //     entries: &[
+        //         BindGroupLayoutEntry {
+        //             binding: 0,
+        //             visibility: ShaderStages::VERTEX_FRAGMENT,
+        //             ty: BindingType::Buffer {
+        //                 ty: BufferBindingType::Uniform,
+        //                 has_dynamic_offset: true,
+        //                 min_binding_size: Some(ViewUniform::min_size()),
+        //             },
+        //             count: None,
+        //         },
+        //         BindGroupLayoutEntry {
+        //             binding: 1,
+        //             visibility: ShaderStages::VERTEX_FRAGMENT,
+        //             ty: BindingType::Buffer {
+        //                 ty: BufferBindingType::Uniform,
+        //                 has_dynamic_offset: true,
+        //                 min_binding_size: Some(PreviousViewUniform::min_size()),
+        //             },
+        //             count: None,
+        //         },
+        //     ],
+        // });
 
-        let mesh_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        // ty: BufferBindingType::Uniform,
-                        ty: BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(MeshUniform::min_size()),
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(PreviousMeshUniform::min_size()),
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(InstanceIndex::min_size()),
-                    },
-                    count: None,
-                },
-            ],
-        });
+        // let mesh_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        //     label: None,
+        //     entries: &[
+        //         BindGroupLayoutEntry {
+        //             binding: 0,
+        //             visibility: ShaderStages::VERTEX_FRAGMENT,
+        //             ty: BindingType::Buffer {
+        //                 // ty: BufferBindingType::Uniform,
+        //                 ty: BufferBindingType::Storage { read_only: true },
+        //                 has_dynamic_offset: true,
+        //                 min_binding_size: Some(MeshUniform::min_size()),
+        //             },
+        //             count: None,
+        //         },
+        //         BindGroupLayoutEntry {
+        //             binding: 1,
+        //             visibility: ShaderStages::VERTEX_FRAGMENT,
+        //             ty: BindingType::Buffer {
+        //                 ty: BufferBindingType::Uniform,
+        //                 has_dynamic_offset: true,
+        //                 min_binding_size: Some(PreviousMeshUniform::min_size()),
+        //             },
+        //             count: None,
+        //         },
+        //         BindGroupLayoutEntry {
+        //             binding: 2,
+        //             visibility: ShaderStages::VERTEX_FRAGMENT,
+        //             ty: BindingType::Buffer {
+        //                 ty: BufferBindingType::Uniform,
+        //                 has_dynamic_offset: true,
+        //                 min_binding_size: Some(InstanceIndex::min_size()),
+        //             },
+        //             count: None,
+        //         },
+        //     ],
+        // });
 
         Self {
-            view_layout,
-            mesh_layout,
+            // view_layout,
+            // mesh_layout,
             per_object_buffer_batch_size: mesh_pipeline.per_object_buffer_batch_size
         }
     }
@@ -172,7 +172,8 @@ impl SpecializedMeshPipeline for PrepassPipeline {
             Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
         ];
         let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
-        let bind_group_layout = vec![self.view_layout.clone(), self.mesh_layout.clone()];
+        // let bind_group_layout = vec![self.view_layout.clone(), self.mesh_layout.clone()];
+        let bind_group_layout = vec![];
 
         let mut vertex_shader_defs = Vec::new();
 
@@ -397,8 +398,8 @@ fn queue_prepass_meshes(
 // [0.12] refer PrepassViewBindGroup
 #[derive(Resource, Debug)]
 pub struct PrepassBindGroup {
-    pub view: BindGroup,
-    pub mesh: BindGroup,
+    // pub view: BindGroup,
+    // pub mesh: BindGroup,
 }
 
 // [0.12] refer prepare_prepass_view_bind_group
@@ -414,7 +415,7 @@ fn prepare_prepass_bind_group(
     previous_view_uniforms: Res<PreviousViewUniforms>,
 ) {
     trace!("queue_prepass_bind_group");
-    trace!("mesh layout: {:?}", prepass_pipeline.mesh_layout);
+    // trace!("mesh layout: {:?}", prepass_pipeline.mesh_layout);
 
     if let (
         Some(view_binding),
@@ -429,41 +430,41 @@ fn prepare_prepass_bind_group(
         previous_mesh_uniforms.binding(),
         instance_render_assets.instance_indices.binding(),
     ) {
-        let view = render_device.create_bind_group(
-            None,
-            &prepass_pipeline.view_layout,
-            &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: view_binding,
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: previous_view_binding,
-                },
-            ],
-        );
-        let mesh = render_device.create_bind_group(
-            None,
-            &prepass_pipeline.mesh_layout,
-            &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: mesh_binding,
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: previous_mesh_binding,
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: instance_indices_binding,
-                },
-            ],
-        );
-        info!("mesh bindgroup: {:?}", mesh);
+        // let view = render_device.create_bind_group(
+        //     None,
+        //     &prepass_pipeline.view_layout,
+        //     &[
+        //         BindGroupEntry {
+        //             binding: 0,
+        //             resource: view_binding,
+        //         },
+        //         BindGroupEntry {
+        //             binding: 1,
+        //             resource: previous_view_binding,
+        //         },
+        //     ],
+        // );
+        // let mesh = render_device.create_bind_group(
+        //     None,
+        //     &prepass_pipeline.mesh_layout,
+        //     &[
+        //         BindGroupEntry {
+        //             binding: 0,
+        //             resource: mesh_binding,
+        //         },
+        //         BindGroupEntry {
+        //             binding: 1,
+        //             resource: previous_mesh_binding,
+        //         },
+        //         BindGroupEntry {
+        //             binding: 2,
+        //             resource: instance_indices_binding,
+        //         },
+        //     ],
+        // );
+        // debug!("mesh bindgroup: {:?}", mesh);
 
-        commands.insert_resource(PrepassBindGroup { view, mesh });
+        commands.insert_resource(PrepassBindGroup {  });
     }
 }
 
@@ -549,11 +550,11 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassViewBindGroup<
     ) -> RenderCommandResult {
         let prepass_bind_group = bind_group.into_inner();
 
-        pass.set_bind_group(
-            I,
-            &prepass_bind_group.view,
-            &[view_uniform.offset, previous_view_uniform.offset],
-        );
+        // pass.set_bind_group(
+        //     I,
+        //     &prepass_bind_group.view,
+        //     &[view_uniform.offset, previous_view_uniform.offset],
+        // );
 
         RenderCommandResult::Success
     }
@@ -595,24 +596,24 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
             dynamic_offsets[0] = dynamic_offset.get();
         }
 
-        info!(
+        debug!(
             "mesh index is {:?}, instance_index: {:?}",
             dynamic_offsets[0], instance_index.0
         );
-        info!("mesh bindgroup: {:?}", prepass_bind_group.mesh);
-        // info!("mesh_trasform index is {:?}", index.index());
+        // debug!("mesh bindgroup: {:?}", prepass_bind_group.mesh);
+        // debug!("mesh_trasform index is {:?}", index.index());
 
-        pass.set_bind_group(
-            I,
-            &prepass_bind_group.mesh,
-            &[
-                dynamic_offsets[0],
-                // instance_index.0,
-                // index.index(),
-                previous_mesh_uniform.index(),
-                instance_index.0,
-            ],
-        );
+        // pass.set_bind_group(
+        //     I,
+        //     &prepass_bind_group.mesh,
+        //     &[
+        //         dynamic_offsets[0],
+        //         // instance_index.0,
+        //         // index.index(),
+        //         previous_mesh_uniform.index(),
+        //         instance_index.0,
+        //     ],
+        // );
 
         RenderCommandResult::Success
     }
@@ -687,14 +688,14 @@ impl ViewNode for PrepassNode {
                 render_pass.set_camera_viewport(viewport);
             }
 
-            info!("prepass phase render now");
+            debug!("prepass phase render now");
             for item in prepass_phase.items.iter() {
-                info!("prepass phase item is {:?}", item.entity());
+                debug!("prepass phase item is {:?}", item.entity());
             }
 
             let view_entity = graph.view_entity();
-            info!("prepass phase view_entity: {:?}", view_entity);
 
+            info!("prepass phase view_entity: {:?}", view_entity);
             prepass_phase.render(&mut render_pass, world, view_entity);
         }
 
