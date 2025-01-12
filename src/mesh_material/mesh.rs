@@ -71,12 +71,12 @@ pub enum MeshAssetState {
 
 /// Holds all GPU representatives of mesh assets.
 #[derive(Default, Deref, DerefMut, Resource)]
-pub struct GpuMeshes(HashMap<Handle<Mesh>, (GpuMesh, GpuMeshSlice)>);
+pub struct GpuMeshes(HashMap<AssetId<Mesh>, (GpuMesh, GpuMeshSlice)>);
 
 #[derive(Default, Resource)]
 pub struct ExtractedMeshes {
-    extracted: Vec<(Handle<Mesh>, Mesh)>,
-    removed: Vec<Handle<Mesh>>,
+    extracted: Vec<(AssetId<Mesh>, Mesh)>,
+    removed: Vec<AssetId<Mesh>>,
 }
 
 fn extract_mesh_assets(
@@ -87,22 +87,24 @@ fn extract_mesh_assets(
 ) {
     let mut changed_assets = HashSet::default();
     let mut removed = Vec::new();
-    for event in events.iter() {
+    for event in events.read() {
         match event {
-            AssetEvent::Created { handle } | AssetEvent::Modified { handle } => {
-                changed_assets.insert(handle.clone_weak());
+            AssetEvent::Added { id } | AssetEvent::Modified { id } => {
+                changed_assets.insert(id);
             }
-            AssetEvent::Removed { handle } => {
-                changed_assets.remove(handle);
-                removed.push(handle.clone_weak());
+            AssetEvent::Removed { id } => {
+                changed_assets.remove(id);
+                removed.push(*id);
             }
+
+            AssetEvent::LoadedWithDependencies { .. } => {}
         }
     }
 
     let mut extracted = Vec::new();
-    for handle in changed_assets.drain() {
-        if let Some(mesh) = assets.get(&handle) {
-            extracted.push((handle, mesh.clone()));
+    for id in changed_assets.drain() {
+        if let Some(mesh) = assets.get(*id) {
+            extracted.push((*id, mesh.clone()));
         }
     }
 
@@ -118,7 +120,7 @@ fn extract_mesh_assets(
 fn prepare_mesh_assets(
     mut extracted_assets: ResMut<ExtractedMeshes>,
     mut asset_state: ResMut<MeshAssetState>,
-    mut assets: Local<BTreeMap<Handle<Mesh>, GpuMesh>>,
+    mut assets: Local<BTreeMap<AssetId<Mesh>, GpuMesh>>,
     mut meshes: ResMut<GpuMeshes>,
     mut render_assets: ResMut<MeshRenderAssets>,
     render_device: Res<RenderDevice>,
@@ -160,7 +162,7 @@ fn prepare_mesh_assets(
             .append(&mut mesh.nodes.clone());
 
         meshes.insert(
-            handle.clone_weak(),
+            *handle,
             (
                 mesh.clone(),
                 GpuMeshSlice {

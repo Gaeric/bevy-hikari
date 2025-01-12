@@ -2,7 +2,6 @@ use super::{
     GpuStandardMaterial, GpuStandardMaterialBuffer, GpuStandardMaterialOffset, MeshMaterialSystems,
 };
 use bevy::{
-    asset::HandleId,
     prelude::*,
     render::{
         render_resource::*,
@@ -27,7 +26,7 @@ impl Plugin for MaterialPlugin {
                 .add_systems(
                     Render,
                     prepare_material_assets
-                        .in_set(RenderSet::Prepare)
+                        .in_set(RenderSet::PrepareAssets)
                         .in_set(MeshMaterialSystems::PrepareAssets)
                         .after(MeshMaterialSystems::PrePrepareAssets),
                 );
@@ -48,7 +47,7 @@ impl Plugin for GenericMaterialPlugin {
                 .add_systems(
                     Render,
                     prepare_generic_material_assets
-                        .in_set(RenderSet::Prepare)
+                        .in_set(RenderSet::PrepareAssets)
                         .in_set(MeshMaterialSystems::PrePrepareAssets),
                 );
         }
@@ -62,17 +61,17 @@ pub struct MaterialRenderAssets {
 }
 
 #[derive(Default, Deref, DerefMut, Resource)]
-pub struct StandardMaterials(BTreeMap<HandleId, StandardMaterial>);
+pub struct StandardMaterials(BTreeMap<AssetId<StandardMaterial>, StandardMaterial>);
 
 #[derive(Default, Deref, DerefMut, Resource)]
 pub struct GpuStandardMaterials(
-    HashMap<HandleUntyped, (GpuStandardMaterial, GpuStandardMaterialOffset)>,
+    HashMap<AssetId<StandardMaterial>, (GpuStandardMaterial, GpuStandardMaterialOffset)>,
 );
 
 #[derive(Default, Resource)]
 pub struct ExtractedMaterials {
-    extracted: Vec<(Handle<StandardMaterial>, StandardMaterial)>,
-    removed: Vec<Handle<StandardMaterial>>,
+    extracted: Vec<(AssetId<StandardMaterial>, StandardMaterial)>,
+    removed: Vec<AssetId<StandardMaterial>>,
 }
 
 fn extract_material_assets(
@@ -82,22 +81,23 @@ fn extract_material_assets(
 ) {
     let mut changed_assets = HashSet::default();
     let mut removed = Vec::new();
-    for event in events.iter() {
+    for event in events.read() {
         match event {
-            AssetEvent::Created { handle } | AssetEvent::Modified { handle } => {
-                changed_assets.insert(handle.clone_weak());
+            AssetEvent::Added { id } | AssetEvent::Modified { id } => {
+                changed_assets.insert(id.clone());
             }
-            AssetEvent::Removed { handle } => {
-                changed_assets.remove(handle);
-                removed.push(handle.clone_weak());
+            AssetEvent::Removed { id } => {
+                changed_assets.remove(id);
+                removed.push(id.clone());
             }
+            AssetEvent::LoadedWithDependencies { .. } => {}
         }
     }
 
     let mut extracted = Vec::new();
-    for handle in changed_assets.drain() {
-        if let Some(material) = assets.get(&handle) {
-            extracted.push((handle, material.clone()));
+    for id in changed_assets.drain() {
+        if let Some(material) = assets.get(id) {
+            extracted.push((id, material.clone()));
         }
     }
 
@@ -109,8 +109,8 @@ fn prepare_generic_material_assets(
     mut materials: ResMut<StandardMaterials>,
     render_assets: ResMut<MaterialRenderAssets>,
 ) {
-    for handle in extracted_assets.removed.drain(..) {
-        materials.remove(&handle.id());
+    for id in extracted_assets.removed.drain(..) {
+        materials.remove(&id);
     }
 
     let render_assets = render_assets.into_inner();
@@ -120,7 +120,7 @@ fn prepare_generic_material_assets(
         if let Some(ref image) = material.base_color_texture {
             render_assets.textures.insert(image.clone());
         }
-        materials.insert(handle.id(), material);
+        materials.insert(handle, material);
     }
 }
 
@@ -179,8 +179,7 @@ fn prepare_material_assets(
                 value: offset as u32,
             };
 
-            let handle = HandleUntyped::weak(*handle);
-            assets.insert(handle, (material, offset));
+            assets.insert(*handle, (material, offset));
             material
         })
         .collect();

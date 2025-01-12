@@ -149,7 +149,7 @@ fn instance_event_system(
         >,
     )>,
 ) {
-    for entity in removed.iter() {
+    for entity in removed.read() {
         events.send(InstanceEvent::Removed(entity));
     }
     for (entity, mesh, material) in &set.p0() {
@@ -175,8 +175,8 @@ pub struct ExtractedInstances {
         Entity,
         Aabb,
         GlobalTransform,
-        Handle<Mesh>,
-        Handle<StandardMaterial>,
+        AssetId<Mesh>,
+        AssetId<StandardMaterial>,
     )>,
     removed: Vec<Entity>,
 }
@@ -189,7 +189,7 @@ fn extract_instances(
     let mut extracted = vec![];
     let mut removed = vec![];
 
-    for event in events.iter() {
+    for event in events.read() {
         match event {
             InstanceEvent::Created(entity, mesh, material)
             | InstanceEvent::Modified(entity, mesh, material) => {
@@ -198,8 +198,8 @@ fn extract_instances(
                         *entity,
                         aabb.clone(),
                         *transform,
-                        mesh.clone_weak(),
-                        material.clone_weak(),
+                        mesh.id(),
+                        material.id(),
                     ));
                 }
             }
@@ -225,7 +225,6 @@ fn prepare_generic_instances(
         instances.remove(&removed);
     }
     for (entity, aabb, transform, mesh, material) in extracted_instances.extracted.drain(..) {
-        let material = HandleUntyped::weak(material.id());
         let transform = transform.compute_matrix();
         let center = transform.transform_point3a(aabb.center);
         let vertices: Vec<_> = (0..8i32)
