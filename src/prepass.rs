@@ -201,8 +201,8 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                 entry_point: "fragment".into(),
                 targets: vec![
                     Some(ColorTargetState {
-                        // format: POSITION_FORMAT,
-                        format: DEBUG_FORMAT,
+                        format: POSITION_FORMAT,
+                        // format: DEBUG_FORMAT,
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     }),
@@ -217,7 +217,8 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                         write_mask: ColorWrites::ALL,
                     }),
                     Some(ColorTargetState {
-                        format: VELOCITY_UV_FORMAT,
+                        // format: VELOCITY_UV_FORMAT,
+                        format: DEBUG_FORMAT,
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     }),
@@ -461,7 +462,7 @@ fn prepare_prepass_bind_group(
                 },
             ],
         );
-        info!("mesh bindgroup: {:?}", mesh);
+        debug!("mesh bindgroup: {:?}", mesh);
 
         commands.insert_resource(PrepassBindGroup { view, mesh });
     }
@@ -595,11 +596,11 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
             dynamic_offsets[0] = dynamic_offset.get();
         }
 
-        info!(
+        debug!(
             "mesh index is {:?}, instance_index: {:?}",
             dynamic_offsets[0], instance_index.0
         );
-        info!("mesh bindgroup: {:?}", prepass_bind_group.mesh);
+        debug!("mesh bindgroup: {:?}", prepass_bind_group.mesh);
         // info!("mesh_trasform index is {:?}", index.index());
 
         pass.set_bind_group(
@@ -651,8 +652,8 @@ impl ViewNode for PrepassNode {
                 label: Some("main_prepass"),
                 color_attachments: &[
                     Some(RenderPassColorAttachment {
-                        view: &view_target.out_texture(),
-                        // view: &target.position.texture_view,
+                        // view: &view_target.out_texture(),
+                        view: &target.position.texture_view,
                         resolve_target: None,
                         ops,
                     }),
@@ -667,7 +668,8 @@ impl ViewNode for PrepassNode {
                         ops,
                     }),
                     Some(RenderPassColorAttachment {
-                        view: &target.velocity_uv.texture_view,
+                        // view: &target.velocity_uv.texture_view,
+                        view: &view_target.out_texture(),
                         resolve_target: None,
                         ops,
                     }),
@@ -687,13 +689,13 @@ impl ViewNode for PrepassNode {
                 render_pass.set_camera_viewport(viewport);
             }
 
-            info!("prepass phase render now");
+            debug!("prepass phase render now");
             for item in prepass_phase.items.iter() {
-                info!("prepass phase item is {:?}", item.entity());
+                debug!("prepass phase item is {:?}", item.entity());
             }
 
             let view_entity = graph.view_entity();
-            info!("prepass phase view_entity: {:?}", view_entity);
+            debug!("prepass phase view_entity: {:?}", view_entity);
 
             prepass_phase.render(&mut render_pass, world, view_entity);
         }

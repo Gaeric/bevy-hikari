@@ -132,8 +132,8 @@ impl Plugin for HikariPlugin {
             ViewPlugin,
             MeshMaterialPlugin,
             PrepassPlugin,
-            LightPlugin,
-            OverlayPlugin,
+            // LightPlugin,
+            // OverlayPlugin,
         ))
         .add_systems(Startup, load_system);
 
