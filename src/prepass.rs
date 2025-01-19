@@ -127,26 +127,26 @@ impl FromWorld for PrepassPipeline {
                     },
                     count: None,
                 },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(PreviousMeshUniform::min_size()),
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(InstanceIndex::min_size()),
-                    },
-                    count: None,
-                },
+                // BindGroupLayoutEntry {
+                //     binding: 1,
+                //     visibility: ShaderStages::VERTEX_FRAGMENT,
+                //     ty: BindingType::Buffer {
+                //         ty: BufferBindingType::Uniform,
+                //         has_dynamic_offset: true,
+                //         min_binding_size: Some(PreviousMeshUniform::min_size()),
+                //     },
+                //     count: None,
+                // },
+                // BindGroupLayoutEntry {
+                //     binding: 2,
+                //     visibility: ShaderStages::VERTEX_FRAGMENT,
+                //     ty: BindingType::Buffer {
+                //         ty: BufferBindingType::Uniform,
+                //         has_dynamic_offset: true,
+                //         min_binding_size: Some(InstanceIndex::min_size()),
+                //     },
+                //     count: None,
+                // },
             ],
         });
 
@@ -179,6 +179,7 @@ impl SpecializedMeshPipeline for PrepassPipeline {
         vertex_shader_defs.push("MESH_BINDGROUP_1".into());
 
         if let Some(per_object_buffer_batch_size) = self.per_object_buffer_batch_size {
+            info!("there is per_object_buffer_batch_size");
             vertex_shader_defs.push(ShaderDefVal::UInt(
                     "PER_OBJECT_BUFFER_BATCH_SIZE".into(),
                     per_object_buffer_batch_size,
@@ -415,7 +416,6 @@ fn prepare_prepass_bind_group(
     previous_view_uniforms: Res<PreviousViewUniforms>,
 ) {
     trace!("queue_prepass_bind_group");
-    trace!("mesh layout: {:?}", prepass_pipeline.mesh_layout);
 
     if let (
         Some(view_binding),
@@ -452,14 +452,14 @@ fn prepare_prepass_bind_group(
                     binding: 0,
                     resource: mesh_binding,
                 },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: previous_mesh_binding,
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: instance_indices_binding,
-                },
+                // BindGroupEntry {
+                //     binding: 1,
+                //     resource: previous_mesh_binding,
+                // },
+                // BindGroupEntry {
+                //     binding: 2,
+                //     resource: instance_indices_binding,
+                // },
             ],
         );
         debug!("mesh bindgroup: {:?}", mesh);
@@ -610,8 +610,8 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
                 dynamic_offsets[0],
                 // instance_index.0,
                 // index.index(),
-                previous_mesh_uniform.index(),
-                instance_index.0,
+                // previous_mesh_uniform.index(),
+                // instance_index.0,
             ],
         );
 

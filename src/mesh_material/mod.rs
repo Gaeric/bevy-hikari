@@ -280,7 +280,7 @@ impl GpuMesh {
             _ => Err(PrepareMeshError::IncompatiblePrimitiveTopology),
         }?;
 
-        info!("gpu primitives is {:?}", primitives);
+        // info!("gpu primitives is {:?}", primitives);
 
         let bvh = BVH::build(&mut primitives);
         let nodes = bvh.flatten_custom(&|aabb, entry_index, exit_index, primitive_index| GpuNode {
