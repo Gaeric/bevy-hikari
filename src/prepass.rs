@@ -50,9 +50,9 @@ impl Plugin for PrepassPlugin {
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 // [0.8] refer Opaque3d
-                .init_resource::<DrawFunctions<Prepass>>()
+                .init_resource::<DrawFunctions<PrepassPhase>>()
                 .init_resource::<SpecializedMeshPipelines<PrepassPipeline>>()
-                .add_render_command::<Prepass, DrawPrepass>()
+                .add_render_command::<PrepassPhase, DrawPrepass>()
                 .add_systems(
                     ExtractSchedule,
                     extract_prepass_camera_phases.in_set(RenderSet::ExtractCommands),
@@ -63,7 +63,7 @@ impl Plugin for PrepassPlugin {
                         prepare_prepass_targets.in_set(RenderSet::Prepare),
                         queue_prepass_meshes.in_set(RenderSet::Queue),
                         prepare_prepass_bind_group.in_set(RenderSet::PrepareBindGroups),
-                        sort_phase_system::<Prepass>.in_set(RenderSet::PhaseSort),
+                        sort_phase_system::<PrepassPhase>.in_set(RenderSet::PhaseSort),
                     ),
                 );
         }
@@ -264,7 +264,7 @@ fn extract_prepass_camera_phases(
         if camera.is_active {
             commands
                 .get_or_spawn(entity)
-                .insert(RenderPhase::<Prepass>::default());
+                .insert(RenderPhase::<PrepassPhase>::default());
         }
     }
 }
@@ -282,7 +282,7 @@ fn prepare_prepass_targets(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     mut texture_cache: ResMut<TextureCache>,
-    cameras: Query<(Entity, &ExtractedCamera), With<RenderPhase<Prepass>>>,
+    cameras: Query<(Entity, &ExtractedCamera), With<RenderPhase<PrepassPhase>>>,
 ) {
     for (entity, camera) in &cameras {
         if let Some(size) = camera.physical_target_size {
@@ -347,14 +347,14 @@ fn prepare_prepass_targets(
 
 // verify ok
 fn queue_prepass_meshes(
-    draw_functions: Res<DrawFunctions<Prepass>>,
+    draw_functions: Res<DrawFunctions<PrepassPhase>>,
     render_meshes: Res<RenderAssets<Mesh>>,
     prepass_pipeline: Res<PrepassPipeline>,
     mut pipelines: ResMut<SpecializedMeshPipelines<PrepassPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
     // meshes: Query<(Entity, &Handle<Mesh>, &MeshUniform, &DynamicInstanceIndex)>,
     render_mesh_instances: Res<RenderMeshInstances>,
-    mut views: Query<(&ExtractedView, &VisibleEntities, &mut RenderPhase<Prepass>)>,
+    mut views: Query<(&ExtractedView, &VisibleEntities, &mut RenderPhase<PrepassPhase>)>,
 ) {
     debug!("queue_prepass_meshes in Render Queue.");
     let draw_function = draw_functions.read().get_id::<DrawPrepass>().unwrap();
@@ -384,7 +384,7 @@ fn queue_prepass_meshes(
 
             debug!("mesh is {mesh:?}, distance is {distance}");
 
-            prepass_phase.add(Prepass {
+            prepass_phase.add(PrepassPhase {
                 distance,
                 entity: *visible_entity,
                 pipeline,
@@ -468,7 +468,7 @@ fn prepare_prepass_bind_group(
     }
 }
 
-pub struct Prepass {
+pub struct PrepassPhase {
     pub distance: f32,
     pub entity: Entity,
     pub pipeline: CachedRenderPipelineId,
@@ -477,7 +477,7 @@ pub struct Prepass {
     pub dynamic_offset: Option<NonMaxU32>,
 }
 
-impl PhaseItem for Prepass {
+impl PhaseItem for PrepassPhase {
     type SortKey = FloatOrd;
 
     #[inline]
@@ -516,7 +516,7 @@ impl PhaseItem for Prepass {
     }
 }
 
-impl CachedRenderPipelinePhaseItem for Prepass {
+impl CachedRenderPipelinePhaseItem for PrepassPhase {
     #[inline]
     fn cached_pipeline(&self) -> CachedRenderPipelineId {
         self.pipeline
@@ -592,11 +592,13 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
 
         let mut dynamic_offsets: [u32; 1] = Default::default();
 
+        // how to get right dynamic offset
         if let Some(dynamic_offset) = item.dynamic_offset() {
             dynamic_offsets[0] = dynamic_offset.get();
+            info!("dynamic offset is {:?}", dynamic_offsets[0]);
         }
 
-        debug!(
+        info!(
             "mesh index is {:?}, instance_index: {:?}",
             dynamic_offsets[0], instance_index.0
         );
@@ -626,7 +628,7 @@ pub struct PrepassNode;
 impl ViewNode for PrepassNode {
     type ViewQuery = (
         &'static ExtractedCamera,
-        &'static RenderPhase<Prepass>,
+        &'static RenderPhase<PrepassPhase>,
         &'static Camera3d,
         &'static PrepassTarget,
         &'static ViewTarget,
