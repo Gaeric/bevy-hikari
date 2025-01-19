@@ -79,20 +79,20 @@ fn setup(
     // });
 
     // Only directional light is supported
-    const HALF_SIZE: f32 = 5.0;
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            illuminance: 100000.0,
-            shadows_enabled: true,
-            ..Default::default()
-        },
-        transform: Transform {
-            translation: Vec3::new(0.0, 5.0, 0.0),
-            rotation: Quat::from_euler(EulerRot::XYZ, -PI / 8.0, -PI / 4.0, 0.0),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
+    // const HALF_SIZE: f32 = 5.0;
+    // commands.spawn(DirectionalLightBundle {
+    //     directional_light: DirectionalLight {
+    //         illuminance: 100000.0,
+    //         shadows_enabled: true,
+    //         ..Default::default()
+    //     },
+    //     transform: Transform {
+    //         translation: Vec3::new(0.0, 5.0, 0.0),
+    //         rotation: Quat::from_euler(EulerRot::XYZ, -PI / 8.0, -PI / 4.0, 0.0),
+    //         ..Default::default()
+    //     },
+    //     ..Default::default()
+    // });
 
     // Camera
     commands.spawn(Camera3dBundle {
