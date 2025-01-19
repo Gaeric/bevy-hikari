@@ -201,8 +201,8 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                 entry_point: "fragment".into(),
                 targets: vec![
                     Some(ColorTargetState {
-                        format: POSITION_FORMAT,
-                        // format: DEBUG_FORMAT,
+                        // format: POSITION_FORMAT,
+                        format: DEBUG_FORMAT,
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     }),
@@ -217,8 +217,8 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                         write_mask: ColorWrites::ALL,
                     }),
                     Some(ColorTargetState {
-                        // format: VELOCITY_UV_FORMAT,
-                        format: DEBUG_FORMAT,
+                        format: VELOCITY_UV_FORMAT,
+                        // format: DEBUG_FORMAT,
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     }),
@@ -652,8 +652,8 @@ impl ViewNode for PrepassNode {
                 label: Some("main_prepass"),
                 color_attachments: &[
                     Some(RenderPassColorAttachment {
-                        // view: &view_target.out_texture(),
-                        view: &target.position.texture_view,
+                        view: &view_target.out_texture(),
+                        // view: &target.position.texture_view,
                         resolve_target: None,
                         ops,
                     }),
@@ -668,8 +668,8 @@ impl ViewNode for PrepassNode {
                         ops,
                     }),
                     Some(RenderPassColorAttachment {
-                        // view: &target.velocity_uv.texture_view,
-                        view: &view_target.out_texture(),
+                        view: &target.velocity_uv.texture_view,
+                        // view: &view_target.out_texture(),
                         resolve_target: None,
                         ops,
                     }),
