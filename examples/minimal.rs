@@ -40,20 +40,20 @@ fn setup(
     //     },
     //     ..Default::default()
     // });
-    // commands.spawn(PbrBundle {
-    //     mesh: meshes.add(Mesh::from(shape::Plane::default())),
-    //     material: materials.add(StandardMaterial {
-    //         base_color: Color::GRAY,
-    //         perceptual_roughness: 1.0,
-    //         ..Default::default()
-    //     }),
-    //     transform: Transform {
-    //         translation: Vec3::new(0.0, -1.0, 0.0),
-    //         scale: Vec3::new(400.0, 1.0, 400.0),
-    //         ..Default::default()
-    //     },
-    //     ..Default::default()
-    // });
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Plane::default())),
+        material: materials.add(StandardMaterial {
+            base_color: Color::GRAY,
+            perceptual_roughness: 1.0,
+            ..Default::default()
+        }),
+        transform: Transform {
+            translation: Vec3::new(0.0, -1.0, 0.0),
+            scale: Vec3::new(400.0, 1.0, 400.0),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 
     // Sphere
     commands.spawn(PbrBundle {
@@ -111,19 +111,19 @@ fn setup(
 
     // Only directional light is supported
     // const HALF_SIZE: f32 = 5.0;
-    // commands.spawn(DirectionalLightBundle {
-    //     directional_light: DirectionalLight {
-    //         illuminance: 100000.0,
-    //         shadows_enabled: true,
-    //         ..Default::default()
-    //     },
-    //     transform: Transform {
-    //         translation: Vec3::new(0.0, 5.0, 0.0),
-    //         rotation: Quat::from_euler(EulerRot::XYZ, -PI / 8.0, -PI / 4.0, 0.0),
-    //         ..Default::default()
-    //     },
-    //     ..Default::default()
-    // });
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            illuminance: 100000.0,
+            shadows_enabled: true,
+            ..Default::default()
+        },
+        transform: Transform {
+            translation: Vec3::new(0.0, 5.0, 0.0),
+            rotation: Quat::from_euler(EulerRot::XYZ, -PI / 8.0, -PI / 4.0, 0.0),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 
     // Camera
     commands.spawn(Camera3dBundle {

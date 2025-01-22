@@ -545,9 +545,9 @@ impl CachedRenderPipelinePhaseItem for PrepassPhase {
 type DrawPrepass = (
     SetItemPipeline,
     SetPrepassViewBindGroup<0>,
-    // SetPrepassMeshBindGroup<1>,
+    SetPrepassMeshBindGroup<1>,
     // SetMeshViewBindGroup<0>,
-    SetMeshBindGroup<1>,
+    // SetMeshBindGroup<1>,
     DrawMesh,
 );
 
@@ -666,8 +666,8 @@ impl ViewNode for PrepassNode {
         {
             // let _main_prepass_span = info_span!("main_prepass").entered();
             let ops = Operations {
-                load: LoadOp::Clear(Color::NONE.into()),
-                // load: LoadOp::Load,
+                // load: LoadOp::Clear(Color::NONE.into()),
+                load: LoadOp::Load,
                 store: true,
             };
             let pass_descriptor = RenderPassDescriptor {
