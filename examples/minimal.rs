@@ -40,20 +40,20 @@ fn setup(
     //     },
     //     ..Default::default()
     // });
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane::default())),
-        material: materials.add(StandardMaterial {
-            base_color: Color::GRAY,
-            perceptual_roughness: 1.0,
-            ..Default::default()
-        }),
-        transform: Transform {
-            translation: Vec3::new(0.0, -1.0, 0.0),
-            scale: Vec3::new(400.0, 1.0, 400.0),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
+    // commands.spawn(PbrBundle {
+    //     mesh: meshes.add(Mesh::from(shape::Plane::default())),
+    //     material: materials.add(StandardMaterial {
+    //         base_color: Color::GRAY,
+    //         perceptual_roughness: 1.0,
+    //         ..Default::default()
+    //     }),
+    //     transform: Transform {
+    //         translation: Vec3::new(0.0, -1.0, 0.0),
+    //         scale: Vec3::new(400.0, 1.0, 400.0),
+    //         ..Default::default()
+    //     },
+    //     ..Default::default()
+    // });
 
     // Sphere
     commands.spawn(PbrBundle {
@@ -68,6 +68,37 @@ fn setup(
             ..Default::default()
         }),
         transform: Transform::from_xyz(2.0, 0.5, 0.0),
+        ..Default::default()
+    });
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::UVSphere {
+            radius: 0.5,
+            ..Default::default()
+        })),
+        material: materials.add(StandardMaterial {
+            base_color_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
+            emissive: Color::rgba(1.0, 1.0, 1.0, 0.1),
+            emissive_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
+            ..Default::default()
+        }),
+        transform: Transform::from_xyz(-2.0, 0.5, 0.0),
+        ..Default::default()
+    });
+
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::UVSphere {
+            radius: 0.5,
+            ..Default::default()
+        })),
+        material: materials.add(StandardMaterial {
+            base_color_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
+            emissive: Color::rgba(1.0, 1.0, 1.0, 0.1),
+            emissive_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
+            ..Default::default()
+        }),
+        transform: Transform::from_xyz(0.0, 0.5, 3.0),
         ..Default::default()
     });
     // comment for clear scene

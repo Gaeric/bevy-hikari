@@ -14,10 +14,11 @@ use bevy::{
     },
     pbr::{
         DrawMesh, MeshLayouts, MeshPipeline, MeshPipelineKey, MeshTransforms, MeshUniform,
-        RenderMeshInstances, SetMeshBindGroup,
+        RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
     },
     prelude::*,
     render::{
+        batching::batch_and_prepare_render_phase,
         camera::ExtractedCamera,
         extract_component::{ComponentUniforms, DynamicUniformIndex},
         mesh::MeshVertexBufferLayout,
@@ -59,6 +60,11 @@ impl Plugin for PrepassPlugin {
                 .add_systems(
                     ExtractSchedule,
                     extract_prepass_camera_phases.in_set(RenderSet::ExtractCommands),
+                )
+                .add_systems(
+                    Render,
+                    batch_and_prepare_render_phase::<PrepassPhase, MeshPipeline>
+                        .in_set(RenderSet::PrepareResources),
                 )
                 .add_systems(
                     Render,
@@ -394,7 +400,7 @@ fn queue_prepass_meshes(
                 .specialize(&mut pipeline_cache, &prepass_pipeline, key, &mesh.layout)
                 .unwrap();
 
-            // info!("mesh {mesh:?}, distance {distance}");
+            info!("mesh {mesh:?}, distance {distance}");
 
             prepass_phase.add(PrepassPhase {
                 distance,
@@ -539,8 +545,9 @@ impl CachedRenderPipelinePhaseItem for PrepassPhase {
 type DrawPrepass = (
     SetItemPipeline,
     SetPrepassViewBindGroup<0>,
-    SetPrepassMeshBindGroup<1>,
-    // SetMeshBindGroup<1>,
+    // SetPrepassMeshBindGroup<1>,
+    // SetMeshViewBindGroup<0>,
+    SetMeshBindGroup<1>,
     DrawMesh,
 );
 
@@ -659,8 +666,8 @@ impl ViewNode for PrepassNode {
         {
             // let _main_prepass_span = info_span!("main_prepass").entered();
             let ops = Operations {
-                // load: LoadOp::Clear(Color::NONE.into()),
-                load: LoadOp::Load,
+                load: LoadOp::Clear(Color::NONE.into()),
+                // load: LoadOp::Load,
                 store: true,
             };
             let pass_descriptor = RenderPassDescriptor {
