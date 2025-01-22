@@ -12,7 +12,10 @@ use bevy::{
         lifetimeless::{Read, SRes},
         SystemParamItem,
     },
-    pbr::{DrawMesh, MeshPipeline, MeshPipelineKey, MeshTransforms, MeshUniform, RenderMeshInstances},
+    pbr::{
+        DrawMesh, MeshLayouts, MeshPipeline, MeshPipelineKey, MeshTransforms, MeshUniform,
+        RenderMeshInstances, SetMeshBindGroup,
+    },
     prelude::*,
     render::{
         camera::ExtractedCamera,
@@ -113,47 +116,51 @@ impl FromWorld for PrepassPipeline {
             ],
         });
 
-        let mesh_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        // ty: BufferBindingType::Uniform,
-                        ty: BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(MeshUniform::min_size()),
-                    },
-                    count: None,
-                },
-                // BindGroupLayoutEntry {
-                //     binding: 1,
-                //     visibility: ShaderStages::VERTEX_FRAGMENT,
-                //     ty: BindingType::Buffer {
-                //         ty: BufferBindingType::Uniform,
-                //         has_dynamic_offset: true,
-                //         min_binding_size: Some(PreviousMeshUniform::min_size()),
-                //     },
-                //     count: None,
-                // },
-                // BindGroupLayoutEntry {
-                //     binding: 2,
-                //     visibility: ShaderStages::VERTEX_FRAGMENT,
-                //     ty: BindingType::Buffer {
-                //         ty: BufferBindingType::Uniform,
-                //         has_dynamic_offset: true,
-                //         min_binding_size: Some(InstanceIndex::min_size()),
-                //     },
-                //     count: None,
-                // },
-            ],
-        });
+        let mesh_layout = MeshLayouts::new(&render_device);
+
+        let mesh_layout = mesh_layout.model_only;
+
+        // let mesh_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        //     label: None,
+        //     entries: &[
+        //         BindGroupLayoutEntry {
+        //             binding: 0,
+        //             visibility: ShaderStages::VERTEX_FRAGMENT,
+        //             ty: BindingType::Buffer {
+        //                 // ty: BufferBindingType::Uniform,
+        //                 ty: BufferBindingType::Storage { read_only: true },
+        //                 has_dynamic_offset: true,
+        //                 min_binding_size: Some(MeshUniform::min_size()),
+        //             },
+        //             count: None,
+        //         },
+        //         // BindGroupLayoutEntry {
+        //         //     binding: 1,
+        //         //     visibility: ShaderStages::VERTEX_FRAGMENT,
+        //         //     ty: BindingType::Buffer {
+        //         //         ty: BufferBindingType::Uniform,
+        //         //         has_dynamic_offset: true,
+        //         //         min_binding_size: Some(PreviousMeshUniform::min_size()),
+        //         //     },
+        //         //     count: None,
+        //         // },
+        //         // BindGroupLayoutEntry {
+        //         //     binding: 2,
+        //         //     visibility: ShaderStages::VERTEX_FRAGMENT,
+        //         //     ty: BindingType::Buffer {
+        //         //         ty: BufferBindingType::Uniform,
+        //         //         has_dynamic_offset: true,
+        //         //         min_binding_size: Some(InstanceIndex::min_size()),
+        //         //     },
+        //         //     count: None,
+        //         // },
+        //     ],
+        // });
 
         Self {
             view_layout,
             mesh_layout,
-            per_object_buffer_batch_size: mesh_pipeline.per_object_buffer_batch_size
+            per_object_buffer_batch_size: mesh_pipeline.per_object_buffer_batch_size,
         }
     }
 }
@@ -178,14 +185,14 @@ impl SpecializedMeshPipeline for PrepassPipeline {
 
         vertex_shader_defs.push("MESH_BINDGROUP_1".into());
 
-        if let Some(per_object_buffer_batch_size) = self.per_object_buffer_batch_size {
-            info!("there is per_object_buffer_batch_size");
-            vertex_shader_defs.push(ShaderDefVal::UInt(
-                    "PER_OBJECT_BUFFER_BATCH_SIZE".into(),
-                    per_object_buffer_batch_size,
-                ));
+        // if let Some(per_object_buffer_batch_size) = self.per_object_buffer_batch_size {
+        //     info!("there is per_object_buffer_batch_size");
+        //     vertex_shader_defs.push(ShaderDefVal::UInt(
+        //             "PER_OBJECT_BUFFER_BATCH_SIZE".into(),
+        //             per_object_buffer_batch_size,
+        //         ));
 
-        }
+        // }
 
         Ok(RenderPipelineDescriptor {
             label: None,
@@ -354,25 +361,30 @@ fn queue_prepass_meshes(
     mut pipeline_cache: ResMut<PipelineCache>,
     // meshes: Query<(Entity, &Handle<Mesh>, &MeshUniform, &DynamicInstanceIndex)>,
     render_mesh_instances: Res<RenderMeshInstances>,
-    mut views: Query<(&ExtractedView, &VisibleEntities, &mut RenderPhase<PrepassPhase>)>,
+    mut views: Query<(
+        &ExtractedView,
+        &VisibleEntities,
+        &mut RenderPhase<PrepassPhase>,
+    )>,
 ) {
     debug!("queue_prepass_meshes in Render Queue.");
     let draw_function = draw_functions.read().get_id::<DrawPrepass>().unwrap();
     for (view, visible_entities, mut prepass_phase) in &mut views {
         let rangefinder = view.rangefinder3d();
 
+        info!("visible entities {visible_entities:?}");
         for visible_entity in &visible_entities.entities {
             let Some(mesh_instance) = render_mesh_instances.get(visible_entity) else {
-                return;
+                info!("visible entities {visible_entity:?} not exists in render_mesh_instances");
+                continue;
             };
-
-            debug!("entity is {:?}", visible_entity);
-
-            debug!("mesh id {:?}", mesh_instance.mesh_asset_id);
 
             let Some(mesh) = render_meshes.get(mesh_instance.mesh_asset_id) else {
-                return;
+                info!("{visible_entity:?} not exists in mesh_instance");
+                continue;
             };
+
+            info!("queue_prepass_meshes entity is {:?}", visible_entity);
 
             let distance =
                 rangefinder.distance_translation(&mesh_instance.transforms.transform.translation);
@@ -382,7 +394,7 @@ fn queue_prepass_meshes(
                 .specialize(&mut pipeline_cache, &prepass_pipeline, key, &mesh.layout)
                 .unwrap();
 
-            debug!("mesh is {mesh:?}, distance is {distance}");
+            // info!("mesh {mesh:?}, distance {distance}");
 
             prepass_phase.add(PrepassPhase {
                 distance,
@@ -450,7 +462,7 @@ fn prepare_prepass_bind_group(
             &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: mesh_binding,
+                    resource: mesh_binding.clone(),
                 },
                 // BindGroupEntry {
                 //     binding: 1,
@@ -528,6 +540,7 @@ type DrawPrepass = (
     SetItemPipeline,
     SetPrepassViewBindGroup<0>,
     SetPrepassMeshBindGroup<1>,
+    // SetMeshBindGroup<1>,
     DrawMesh,
 );
 
@@ -609,7 +622,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
             I,
             &prepass_bind_group.mesh,
             &[
-                dynamic_offsets[0],
+                // dynamic_offsets[0],
                 // instance_index.0,
                 // index.index(),
                 // previous_mesh_uniform.index(),
