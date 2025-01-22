@@ -122,46 +122,46 @@ impl FromWorld for PrepassPipeline {
             ],
         });
 
-        let mesh_layout = MeshLayouts::new(&render_device);
+        // let mesh_layout = MeshLayouts::new(&render_device);
 
-        let mesh_layout = mesh_layout.model_only;
+        // let mesh_layout = mesh_layout.model_only;
 
-        // let mesh_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        //     label: None,
-        //     entries: &[
-        //         BindGroupLayoutEntry {
-        //             binding: 0,
-        //             visibility: ShaderStages::VERTEX_FRAGMENT,
-        //             ty: BindingType::Buffer {
-        //                 // ty: BufferBindingType::Uniform,
-        //                 ty: BufferBindingType::Storage { read_only: true },
-        //                 has_dynamic_offset: true,
-        //                 min_binding_size: Some(MeshUniform::min_size()),
-        //             },
-        //             count: None,
-        //         },
-        //         // BindGroupLayoutEntry {
-        //         //     binding: 1,
-        //         //     visibility: ShaderStages::VERTEX_FRAGMENT,
-        //         //     ty: BindingType::Buffer {
-        //         //         ty: BufferBindingType::Uniform,
-        //         //         has_dynamic_offset: true,
-        //         //         min_binding_size: Some(PreviousMeshUniform::min_size()),
-        //         //     },
-        //         //     count: None,
-        //         // },
-        //         // BindGroupLayoutEntry {
-        //         //     binding: 2,
-        //         //     visibility: ShaderStages::VERTEX_FRAGMENT,
-        //         //     ty: BindingType::Buffer {
-        //         //         ty: BufferBindingType::Uniform,
-        //         //         has_dynamic_offset: true,
-        //         //         min_binding_size: Some(InstanceIndex::min_size()),
-        //         //     },
-        //         //     count: None,
-        //         // },
-        //     ],
-        // });
+        let mesh_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        // ty: BufferBindingType::Uniform,
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: true,
+                        min_binding_size: Some(MeshUniform::min_size()),
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: Some(PreviousMeshUniform::min_size()),
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: Some(InstanceIndex::min_size()),
+                    },
+                    count: None,
+                },
+            ],
+        });
 
         Self {
             view_layout,
@@ -215,8 +215,7 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                 entry_point: "fragment".into(),
                 targets: vec![
                     Some(ColorTargetState {
-                        // format: POSITION_FORMAT,
-                        format: DEBUG_FORMAT,
+                        format: POSITION_FORMAT,
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     }),
@@ -378,19 +377,19 @@ fn queue_prepass_meshes(
     for (view, visible_entities, mut prepass_phase) in &mut views {
         let rangefinder = view.rangefinder3d();
 
-        info!("visible entities {visible_entities:?}");
+        debug!("visible entities {visible_entities:?}");
         for visible_entity in &visible_entities.entities {
             let Some(mesh_instance) = render_mesh_instances.get(visible_entity) else {
-                info!("visible entities {visible_entity:?} not exists in render_mesh_instances");
+                debug!("visible entities {visible_entity:?} not exists in render_mesh_instances");
                 continue;
             };
 
             let Some(mesh) = render_meshes.get(mesh_instance.mesh_asset_id) else {
-                info!("{visible_entity:?} not exists in mesh_instance");
+                debug!("{visible_entity:?} not exists in mesh_instance");
                 continue;
             };
 
-            info!("queue_prepass_meshes entity is {:?}", visible_entity);
+            debug!("queue_prepass_meshes entity is {:?}", visible_entity);
 
             let distance =
                 rangefinder.distance_translation(&mesh_instance.transforms.transform.translation);
@@ -400,7 +399,7 @@ fn queue_prepass_meshes(
                 .specialize(&mut pipeline_cache, &prepass_pipeline, key, &mesh.layout)
                 .unwrap();
 
-            info!("mesh {mesh:?}, distance {distance}");
+            debug!("mesh {mesh:?}, distance {distance}");
 
             prepass_phase.add(PrepassPhase {
                 distance,
@@ -470,14 +469,14 @@ fn prepare_prepass_bind_group(
                     binding: 0,
                     resource: mesh_binding.clone(),
                 },
-                // BindGroupEntry {
-                //     binding: 1,
-                //     resource: previous_mesh_binding,
-                // },
-                // BindGroupEntry {
-                //     binding: 2,
-                //     resource: instance_indices_binding,
-                // },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: previous_mesh_binding,
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: instance_indices_binding,
+                },
             ],
         );
         debug!("mesh bindgroup: {:?}", mesh);
@@ -615,10 +614,10 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
         // how to get right dynamic offset
         if let Some(dynamic_offset) = item.dynamic_offset() {
             dynamic_offsets[0] = dynamic_offset.get();
-            info!("dynamic offset is {:?}", dynamic_offsets[0]);
+            debug!("dynamic offset is {:?}", dynamic_offsets[0]);
         }
 
-        info!(
+        debug!(
             "mesh index is {:?}, instance_index: {:?}",
             dynamic_offsets[0], instance_index.0
         );
@@ -629,11 +628,11 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
             I,
             &prepass_bind_group.mesh,
             &[
-                // dynamic_offsets[0],
+                dynamic_offsets[0],
                 // instance_index.0,
                 // index.index(),
-                // previous_mesh_uniform.index(),
-                // instance_index.0,
+                previous_mesh_uniform.index(),
+                instance_index.0,
             ],
         );
 
@@ -674,8 +673,7 @@ impl ViewNode for PrepassNode {
                 label: Some("main_prepass"),
                 color_attachments: &[
                     Some(RenderPassColorAttachment {
-                        view: &view_target.out_texture(),
-                        // view: &target.position.texture_view,
+                        view: &target.position.texture_view,
                         resolve_target: None,
                         ops,
                     }),
