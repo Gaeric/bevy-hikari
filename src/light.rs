@@ -43,7 +43,7 @@ impl Plugin for LightPlugin {
                 .add_systems(
                     Render,
                     (
-                        prepare_light_pass_targets.in_set(RenderSet::PrepareResources),
+                        prepare_light_pass_targets.in_set(RenderSet::PrepareAssets),
                         prepare_frame_uniform.in_set(RenderSet::Prepare),
                         queue_view_bind_groups.in_set(RenderSet::Queue),
                         queue_light_bind_groups.in_set(RenderSet::Queue),
@@ -520,6 +520,8 @@ fn prepare_light_pass_targets(
                 sample_normal: create_texture(NORMAL_TEXTURE_FORMAT, FilterMode::Nearest),
             });
 
+            info!("prepare LightPassTarget");
+
             commands.entity(entity).insert(LightPassTarget {
                 render: create_texture(RADIANCE_TEXTURE_FORMAT, FilterMode::Linear),
                 reservoir,
@@ -693,7 +695,9 @@ fn queue_light_bind_groups(
         ..Default::default()
     });
 
+    info!("queue PrepassTarget and LightPassTarget for create light bind group");
     for (entity, prepass, light_pass) in &query {
+        info!("create light pass bind group");
         if let Some(frame_binding) = frame_uniform.buffer.binding() {
             let deferred = render_device.create_bind_group(
                 None,

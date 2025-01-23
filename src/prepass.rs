@@ -69,7 +69,7 @@ impl Plugin for PrepassPlugin {
                 .add_systems(
                     Render,
                     (
-                        prepare_prepass_targets.in_set(RenderSet::Prepare),
+                        prepare_prepass_targets.in_set(RenderSet::PrepareAssets),
                         queue_prepass_meshes.in_set(RenderSet::Queue),
                         prepare_prepass_bind_group.in_set(RenderSet::PrepareBindGroups),
                         sort_phase_system::<PrepassPhase>.in_set(RenderSet::PhaseSort),
@@ -347,6 +347,7 @@ fn prepare_prepass_targets(
             let velocity_uv = create_texture(VELOCITY_UV_FORMAT);
             let depth = create_texture(TextureFormat::Depth32Float);
 
+            info!("insert PrepassTarget component");
             commands.entity(entity).insert(PrepassTarget {
                 position,
                 normal,

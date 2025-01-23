@@ -12,7 +12,7 @@ fn main() {
     render_app.add_systems(
         Render,
         (
-            generate_demo_data.in_set(RenderSet::Prepare),
+            generate_demo_data.in_set(RenderSet::PrepareAssets),
             query_demo_data.in_set(RenderSet::Queue),
         ),
     );
