@@ -153,10 +153,11 @@ impl Plugin for HikariPlugin {
                 graph::NAME,
                 graph::node::OVERLAY_PASS,
             )
-            .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(
-                graph::NAME,
-                graph::node::UPSCALING,
-            );
+            // .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(
+            //     graph::NAME,
+            //     graph::node::UPSCALING,
+            // )
+;
 
         render_app.add_render_graph_edges(
             graph::NAME,
@@ -164,7 +165,7 @@ impl Plugin for HikariPlugin {
                 graph::node::PREPASS,
                 graph::node::LIGHT_PASS,
                 graph::node::OVERLAY_PASS,
-                graph::node::UPSCALING,
+                // graph::node::UPSCALING,
             ],
         );
     }

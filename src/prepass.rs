@@ -216,6 +216,7 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                 targets: vec![
                     Some(ColorTargetState {
                         format: POSITION_FORMAT,
+                        // format: DEBUG_FORMAT,
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     }),
@@ -674,6 +675,7 @@ impl ViewNode for PrepassNode {
                 color_attachments: &[
                     Some(RenderPassColorAttachment {
                         view: &target.position.texture_view,
+                        // view: &view_target.out_texture(),
                         resolve_target: None,
                         ops,
                     }),

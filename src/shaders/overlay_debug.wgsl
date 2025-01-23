@@ -1,4 +1,4 @@
-#define_import_path bevy_hikari::overlay
+#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
 
 @group(0) @binding(0)
 var render_texture_2d: texture_2d<f32>;
@@ -29,23 +29,21 @@ fn tone_mapping(in: vec4<f32>) -> vec4<f32> {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) position: vec3<f32>,
 };
 
 @vertex
-fn vertex(@location(0) position: vec3<f32>) -> VertexOutput {
+fn vertex(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = vec4<f32>(position, 1.0);
-    out.position = position;
+
     return out;
 }
 
 @fragment
-fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    var uv = 0.5 * in.position.xy + 0.5;
-    uv.y = 1.0 - uv.y;
-    // let color = textureSample(render_texture_2d, render_sampler, uv);
-    // debug for overlay
-    let color = vec4(0.5, 0.6, 0.7, 1.0);
-    return tone_mapping(color);
+fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    // var uv = 0.5 * in.position.xy + 0.5;
+    // uv.y = 1.0 - uv.y;
+    let color = textureSample(render_texture_2d, render_sampler, in.uv);
+    // let color = vec4(uv, 0.5, 0.5);
+    // return tone_mapping(color);
+    return color;
 }

@@ -1,10 +1,17 @@
 use std::ops::Range;
 
-use crate::{light::LightPassTarget, OVERLAY_SHADER_HANDLE, QUAD_HANDLE};
+use crate::{
+    light::LightPassTarget,
+    prepass::{PrepassTarget, DEBUG_FORMAT},
+    OVERLAY_SHADER_HANDLE, QUAD_HANDLE,
+};
 use bevy::{
-    core_pipeline::clear_color::ClearColorConfig,
+    asset::load_internal_asset,
+    core_pipeline::{
+        clear_color::ClearColorConfig, fullscreen_vertex_shader::fullscreen_shader_vertex_state,
+    },
     ecs::system::{lifetimeless::SRes, SystemParamItem},
-    pbr::{DrawMesh, MeshPipelineKey},
+    pbr::{DrawMesh, MeshPipelineKey, SetMeshViewBindGroup},
     prelude::{shape::Quad, *},
     render::{
         camera::ExtractedCamera,
@@ -25,15 +32,25 @@ use bevy::{
     utils::{nonmax::NonMaxU32, FloatOrd},
 };
 
+pub const OVERLAY_DEBUG_SHADER_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(332238352525531982437701789663104912412);
+
 pub struct OverlayPlugin;
 impl Plugin for OverlayPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup);
 
+        load_internal_asset!(
+            app,
+            OVERLAY_DEBUG_SHADER_HANDLE,
+            "shaders/overlay_debug.wgsl",
+            Shader::from_wgsl
+        );
+
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<DrawFunctions<Overlay>>()
-                .init_resource::<SpecializedMeshPipelines<OverlayPipeline>>()
+                .init_resource::<SpecializedRenderPipelines<OverlayPipeline>>()
                 .init_resource::<OverlayBindGroup>()
                 .add_render_command::<Overlay, DrawOverlay>()
                 .add_systems(
@@ -101,36 +118,32 @@ impl FromWorld for OverlayPipeline {
 }
 
 // [0.8] refer MeshPipeline
-impl SpecializedMeshPipeline for OverlayPipeline {
+impl SpecializedRenderPipeline for OverlayPipeline {
     type Key = MeshPipelineKey;
 
-    fn specialize(
-        &self,
-        key: Self::Key,
-        layout: &MeshVertexBufferLayout,
-    ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
-        let vertex_attributes = vec![Mesh::ATTRIBUTE_POSITION.at_shader_location(0)];
-        let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
+    fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
+        // let vertex_attributes = vec![Mesh::ATTRIBUTE_POSITION.at_shader_location(0)];
+        // let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
         let bind_group_layout = vec![self.overlay_layout.clone()];
 
         let shader_defs = Vec::new();
 
-        Ok(RenderPipelineDescriptor {
+        RenderPipelineDescriptor {
             label: None,
             layout: bind_group_layout,
-            vertex: VertexState {
-                shader: OVERLAY_SHADER_HANDLE,
-                shader_defs: shader_defs.clone(),
-                entry_point: "vertex".into(),
-                buffers: vec![vertex_buffer_layout],
-            },
+            vertex: fullscreen_shader_vertex_state(),
             fragment: Some(FragmentState {
-                shader: OVERLAY_SHADER_HANDLE,
+                shader: OVERLAY_DEBUG_SHADER_HANDLE,
                 shader_defs: shader_defs.clone(),
                 entry_point: "fragment".into(),
+                // targets: vec![Some(ColorTargetState {
+                //     format: TextureFormat::bevy_default(),
+                //     blend: Some(BlendState::ALPHA_BLENDING),
+                //     write_mask: ColorWrites::ALL,
+                // })],
                 targets: vec![Some(ColorTargetState {
-                    format: TextureFormat::bevy_default(),
-                    blend: Some(BlendState::ALPHA_BLENDING),
+                    format: DEBUG_FORMAT,
+                    blend: None,
                     write_mask: ColorWrites::ALL,
                 })],
             }),
@@ -145,12 +158,13 @@ impl SpecializedMeshPipeline for OverlayPipeline {
                 conservative: false,
             },
             depth_stencil: None,
-            multisample: MultisampleState {
-                count: key.msaa_samples(),
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-        })
+            multisample: MultisampleState::default(),
+            // multisample: MultisampleState {
+            //     count: key.msaa_samples(),
+            //     mask: !0,
+            //     alpha_to_coverage_enabled: false,
+            // },
+        }
     }
 }
 
@@ -171,27 +185,45 @@ fn extract_overlay_camera_phases(
 fn prepare_overlay_bind_group(
     render_device: Res<RenderDevice>,
     pipeline: Res<OverlayPipeline>,
+    prepass_target: Query<(Entity, &PrepassTarget)>,
     query: Query<(Entity, &LightPassTarget)>,
     mut overlay_bind_group: ResMut<OverlayBindGroup>,
 ) {
-    for (entity, target) in &query {
-        trace!("over bind group entity is {:?}", entity);
+    for (_entity, prepass_target) in &prepass_target {
         let bind_group = render_device.create_bind_group(
             None,
             &pipeline.overlay_layout,
             &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&target.render.texture_view),
+                    resource: BindingResource::TextureView(&prepass_target.position.texture_view),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(&target.render.sampler),
+                    resource: BindingResource::Sampler(&prepass_target.position.sampler),
                 },
             ],
         );
         overlay_bind_group.bind_group = Some(bind_group);
     }
+    // for (entity, target) in &query {
+    //     trace!("over bind group entity is {:?}", entity);
+    //     let bind_group = render_device.create_bind_group(
+    //         None,
+    //         &pipeline.overlay_layout,
+    //         &[
+    //             BindGroupEntry {
+    //                 binding: 0,
+    //                 resource: BindingResource::TextureView(&target.render.texture_view),
+    //             },
+    //             BindGroupEntry {
+    //                 binding: 1,
+    //                 resource: BindingResource::Sampler(&target.render.sampler),
+    //             },
+    //         ],
+    //     );
+    //     overlay_bind_group.bind_group = Some(bind_group);
+    // }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -201,7 +233,7 @@ fn queue_overlay_mesh(
     draw_functions: Res<DrawFunctions<Overlay>>,
     render_meshes: Res<RenderAssets<Mesh>>,
     overlay_pipeline: Res<OverlayPipeline>,
-    mut pipelines: ResMut<SpecializedMeshPipelines<OverlayPipeline>>,
+    mut pipelines: ResMut<SpecializedRenderPipelines<OverlayPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
     mut views: Query<&mut RenderPhase<Overlay>>,
 ) {
@@ -211,15 +243,8 @@ fn queue_overlay_mesh(
         if let Some(mesh) = render_meshes.get(&mesh_handle) {
             let key = MeshPipelineKey::from_msaa_samples(msaa.samples())
                 | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
-            let pipeline_id =
-                pipelines.specialize(&mut pipeline_cache, &overlay_pipeline, key, &mesh.layout);
-            let pipeline_id = match pipeline_id {
-                Ok(id) => id,
-                Err(err) => {
-                    error!("{}", err);
-                    return;
-                }
-            };
+            let pipeline_id = pipelines.specialize(&mut pipeline_cache, &overlay_pipeline, key);
+
             let entity = commands.spawn_empty().insert(mesh_handle.clone()).id();
             overlay_phase.add(Overlay {
                 distance: 0.0,
@@ -290,7 +315,8 @@ impl CachedRenderPipelinePhaseItem for Overlay {
 }
 
 // [0.8] refer DrawWireframes
-type DrawOverlay = (SetItemPipeline, SetOverlayBindGroup<0>, DrawMesh);
+// type DrawOverlay = (SetItemPipeline, SetOverlayBindGroup<0>, DrawMesh);
+type DrawOverlay = (SetItemPipeline, SetOverlayBindGroup<0>);
 
 pub struct SetOverlayBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOverlayBindGroup<I> {
@@ -306,11 +332,13 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOverlayBindGroup<I> {
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let overlay_bind_group = bind_group.into_inner();
-        trace!("render overlay");
-        // todo! sometimes bindgroup is None
-        pass.set_bind_group(I, overlay_bind_group.bind_group.as_ref().unwrap(), &[]);
-        RenderCommandResult::Success
+        if let Some(overlay_bind_group) = &bind_group.into_inner().bind_group {
+            pass.set_bind_group(I, &overlay_bind_group, &[]);
+            pass.draw(0..3, 0..1);
+            RenderCommandResult::Success
+        } else {
+            RenderCommandResult::Failure
+        }
     }
 }
 
@@ -338,18 +366,32 @@ impl ViewNode for OverlayPassNode {
         {
             // let _main_prepass_span = info_span!("main_prepass").entered();
 
+            // let ops = Operations {
+            //     load: match camera_3d.clear_color {
+            //         ClearColorConfig::Default => {
+            //             LoadOp::Clear(world.resource::<ClearColor>().0.into())
+            //         }
+            //         ClearColorConfig::Custom(color) => LoadOp::Clear(color.into()),
+            //         ClearColorConfig::None => LoadOp::Load,
+            //     },
+            //     store: true,
+            // };
+
+            // info!("ops is {ops:?}");
+            // info!("viewtarget sampled {:?}", target.get_color_attachment(ops));
+
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("main_prepass"),
-                color_attachments: &[Some(target.get_color_attachment(Operations {
-                    load: match camera_3d.clear_color {
-                        ClearColorConfig::Default => {
-                            LoadOp::Clear(world.resource::<ClearColor>().0.into())
-                        }
-                        ClearColorConfig::Custom(color) => LoadOp::Clear(color.into()),
-                        ClearColorConfig::None => LoadOp::Load,
+                // color_attachments: &[Some(target.get_color_attachment(ops))],
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &target.out_texture(),
+                    resolve_target: None,
+                    ops: Operations {
+                        // load: LoadOp::Clear(Color::NONE.into()),
+                        load: LoadOp::Load,
+                        store: true,
                     },
-                    store: true,
-                }))],
+                })],
                 depth_stencil_attachment: None,
             });
             if let Some(viewport) = camera.viewport.as_ref() {
