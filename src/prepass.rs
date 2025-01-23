@@ -282,7 +282,7 @@ fn extract_prepass_camera_phases(
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct PrepassTarget {
     pub position: GpuImage,
     pub normal: GpuImage,

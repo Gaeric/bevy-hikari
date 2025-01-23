@@ -189,41 +189,41 @@ fn prepare_overlay_bind_group(
     query: Query<(Entity, &LightPassTarget)>,
     mut overlay_bind_group: ResMut<OverlayBindGroup>,
 ) {
-    // for (_entity, prepass_target) in &prepass_target {
-    //     let bind_group = render_device.create_bind_group(
-    //         None,
-    //         &pipeline.overlay_layout,
-    //         &[
-    //             BindGroupEntry {
-    //                 binding: 0,
-    //                 resource: BindingResource::TextureView(&prepass_target.position.texture_view),
-    //             },
-    //             BindGroupEntry {
-    //                 binding: 1,
-    //                 resource: BindingResource::Sampler(&prepass_target.position.sampler),
-    //             },
-    //         ],
-    //     );
-    //     overlay_bind_group.bind_group = Some(bind_group);
-    // }
-    for (entity, target) in &query {
-        trace!("over bind group entity is {:?}", entity);
+    for (_entity, prepass_target) in &prepass_target {
         let bind_group = render_device.create_bind_group(
             None,
             &pipeline.overlay_layout,
             &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&target.render.texture_view),
+                    resource: BindingResource::TextureView(&prepass_target.position.texture_view),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(&target.render.sampler),
+                    resource: BindingResource::Sampler(&prepass_target.position.sampler),
                 },
             ],
         );
         overlay_bind_group.bind_group = Some(bind_group);
     }
+    // for (entity, target) in &query {
+    //     trace!("over bind group entity is {:?}", entity);
+    //     let bind_group = render_device.create_bind_group(
+    //         None,
+    //         &pipeline.overlay_layout,
+    //         &[
+    //             BindGroupEntry {
+    //                 binding: 0,
+    //                 resource: BindingResource::TextureView(&target.render.texture_view),
+    //             },
+    //             BindGroupEntry {
+    //                 binding: 1,
+    //                 resource: BindingResource::Sampler(&target.render.sampler),
+    //             },
+    //         ],
+    //     );
+    //     overlay_bind_group.bind_group = Some(bind_group);
+    // }
 }
 
 #[allow(clippy::too_many_arguments)]

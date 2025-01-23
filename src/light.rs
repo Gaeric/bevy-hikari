@@ -16,7 +16,7 @@ use bevy::{
         render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_resource::*,
         renderer::{RenderContext, RenderDevice, RenderQueue},
-        texture::{GpuImage, TextureCache},
+        texture::{FallbackImageFormatMsaaCache, GpuImage, TextureCache},
         view::{ViewUniform, ViewUniformOffset, ViewUniforms},
         Render, RenderApp, RenderSet,
     },
@@ -44,6 +44,7 @@ impl Plugin for LightPlugin {
                     Render,
                     (
                         prepare_light_pass_targets.in_set(RenderSet::PrepareAssets),
+                        debug_query.in_set(RenderSet::Queue),
                         prepare_frame_uniform.in_set(RenderSet::Prepare),
                         queue_view_bind_groups.in_set(RenderSet::Queue),
                         queue_light_bind_groups.in_set(RenderSet::Queue),
@@ -443,6 +444,7 @@ impl SpecializedComputePipeline for LightPipeline {
     }
 }
 
+#[derive(Debug)]
 pub struct Reservoir {
     pub reservoir: GpuImage,
     pub radiance: GpuImage,
@@ -453,7 +455,7 @@ pub struct Reservoir {
     pub sample_normal: GpuImage,
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct LightPassTarget {
     pub render: GpuImage,
     pub reservoir: [Reservoir; 2],
@@ -662,6 +664,24 @@ pub struct LightBindGroup {
     pub render: BindGroup,
 }
 
+fn debug_query(
+    light_pass_query: Query<(Entity, &LightPassTarget)>,
+    prepass_query: Query<(Entity, &PrepassTarget)>,
+    cascade_query: Query<(Entity, &PrepassTarget, &LightPassTarget)>,
+) {
+    for (entity, demo_data) in &prepass_query {
+        info!("entity with prepass target data is {:?}", entity)
+    }
+
+    for (entity, demo_data) in &light_pass_query {
+        info!("entity with light pass data is {:?}", entity)
+    }
+
+    for (entity, pprepass, light_pass) in &cascade_query {
+        info!("entity with light pass and target is {entity:?}");
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn queue_light_bind_groups(
     mut commands: Commands,
@@ -678,6 +698,7 @@ fn queue_light_bind_groups(
         let image = match images.get(handle) {
             Some(image) => image,
             None => {
+                error!("there is not noise texture");
                 return;
             }
         };
