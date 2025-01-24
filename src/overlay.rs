@@ -25,7 +25,7 @@ use bevy::{
     utils::{nonmax::NonMaxU32, FloatOrd},
 };
 
-pub const OVERLAY_DEBUG_SHADER_HANDLE: Handle<Shader> =
+pub const OVERLAY_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(332238352525531982437701789663104912412);
 
 pub struct OverlayPlugin;
@@ -33,8 +33,8 @@ impl Plugin for OverlayPlugin {
     fn build(&self, app: &mut App) {
         load_internal_asset!(
             app,
-            OVERLAY_DEBUG_SHADER_HANDLE,
-            "shaders/overlay_debug.wgsl",
+            OVERLAY_SHADER_HANDLE,
+            "shaders/overlay.wgsl",
             Shader::from_wgsl
         );
 
@@ -120,7 +120,7 @@ impl SpecializedRenderPipeline for OverlayPipeline {
             layout: bind_group_layout,
             vertex: fullscreen_shader_vertex_state(),
             fragment: Some(FragmentState {
-                shader: OVERLAY_DEBUG_SHADER_HANDLE,
+                shader: OVERLAY_SHADER_HANDLE,
                 shader_defs: shader_defs.clone(),
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {

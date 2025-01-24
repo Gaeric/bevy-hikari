@@ -45,29 +45,8 @@ pub const MESH_MATERIAL_BINDINGS_HANDLE: Handle<Shader> = Handle::weak_from_u128
 pub const DEFERRED_BINDINGS_HANDLE: Handle<Shader> = Handle::weak_from_u128(14467895678105108252);
 pub const PREPASS_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(4693612430004931427);
 pub const LIGHT_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(9657319286592943583);
-pub const OVERLAY_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(10969344919103020615);
 
-pub const QUAD_HANDLE: Handle<Mesh> = Handle::weak_from_u128(4740146776519512271);
-
-pub struct HikariPlugin {
-    noise_folder: String,
-}
-
-impl HikariPlugin {
-    pub fn new(noise_folder: &str) -> Self {
-        Self {
-            noise_folder: noise_folder.into(),
-        }
-    }
-}
-
-impl Default for HikariPlugin {
-    fn default() -> Self {
-        Self {
-            noise_folder: "textures/blue_noise".into(),
-        }
-    }
-}
+pub struct HikariPlugin; 
 
 // [0.8] refer PbrPlugin
 impl Plugin for HikariPlugin {
@@ -100,12 +79,6 @@ impl Plugin for HikariPlugin {
             app,
             LIGHT_SHADER_HANDLE,
             "shaders/light.wgsl",
-            Shader::from_wgsl
-        );
-        load_internal_asset!(
-            app,
-            OVERLAY_SHADER_HANDLE,
-            "shaders/overlay.wgsl",
             Shader::from_wgsl
         );
 

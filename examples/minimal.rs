@@ -13,7 +13,7 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(HikariPlugin::default())
+        .add_plugins(HikariPlugin)
         .add_systems(Startup, setup)
         .run();
 }
@@ -85,7 +85,6 @@ fn setup(
     //     transform: Transform::from_xyz(-2.0, 0.5, 0.0),
     //     ..Default::default()
     // });
-
 
     // commands.spawn(PbrBundle {
     //     mesh: meshes.add(Mesh::from(shape::UVSphere {
