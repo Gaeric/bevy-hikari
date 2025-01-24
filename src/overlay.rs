@@ -239,7 +239,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOverlayBindGroup<I> {
         _param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        info!("render overlay");
+        trace!("render overlay");
         pass.set_bind_group(I, &bind_group.0, &[]);
         pass.draw(0..3, 0..1);
         RenderCommandResult::Success
