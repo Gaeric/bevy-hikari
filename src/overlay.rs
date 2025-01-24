@@ -146,17 +146,20 @@ fn queue_overlay_bind_groups(
     query: Query<(Entity, &LightPassTarget)>,
 ) {
     for (entity, target) in &query {
+        // let texture = &target.reservoir[0].random;
+        let texture = &target.render;
+
         let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
             label: None,
             layout: &pipeline.overlay_layout,
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&target.render.texture_view),
+                    resource: BindingResource::TextureView(&texture.texture_view),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(&target.render.sampler),
+                    resource: BindingResource::Sampler(&texture.sampler),
                 },
             ],
         });
