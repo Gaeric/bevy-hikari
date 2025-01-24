@@ -1,7 +1,7 @@
 use crate::{
     mesh_material::{MeshMaterialBindGroup, MeshMaterialBindGroupLayout, TextureBindGroupLayout},
     prepass::PrepassTarget,
-    NoiseTexture, LIGHT_SHADER_HANDLE, NOISE_TEXTURE_COUNT, WORKGROUP_SIZE,
+    LIGHT_SHADER_HANDLE, NOISE_TEXTURE_COUNT, WORKGROUP_SIZE,
 };
 use bevy::{
     pbr::{
@@ -11,12 +11,12 @@ use bevy::{
     prelude::*,
     render::{
         camera::ExtractedCamera,
-        extract_resource::ExtractResourcePlugin,
+        extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::RenderAssets,
         render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_resource::*,
         renderer::{RenderContext, RenderDevice, RenderQueue},
-        texture::{FallbackImageFormatMsaaCache, GpuImage, TextureCache},
+        texture::{GpuImage, TextureCache},
         view::{ViewUniform, ViewUniformOffset, ViewUniforms},
         Render, RenderApp, RenderSet,
     },
@@ -30,10 +30,16 @@ pub const POSITION_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
 pub const NORMAL_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8Snorm;
 pub const RANDOM_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 
+// [0.8] refer from compute_shader_game_of_life GameOfLifeImage
+//
+#[derive(Clone, Deref, DerefMut, Resource, ExtractResource)]
+pub struct NoiseTexture(pub Vec<Handle<Image>>);
+
 pub struct LightPlugin;
 impl Plugin for LightPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(ExtractResourcePlugin::<NoiseTexture>::default());
+        app.add_plugins(ExtractResourcePlugin::<NoiseTexture>::default())
+            .add_systems(Startup, noise_load);
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
@@ -57,6 +63,17 @@ impl Plugin for LightPlugin {
     fn finish(&self, app: &mut App) {
         app.sub_app_mut(RenderApp).init_resource::<LightPipeline>();
     }
+}
+
+pub fn noise_load(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let noise_path = "textures/blue_noise";
+    let handles = (0..NOISE_TEXTURE_COUNT)
+        .map(|id| {
+            let name = format!("{}/LDR_RGBA_{}.png", noise_path, id);
+            asset_server.load(&name)
+        })
+        .collect();
+    commands.insert_resource(NoiseTexture(handles));
 }
 
 // [0.8] refer MeshPipeline
@@ -699,7 +716,7 @@ fn queue_light_bind_groups(
         let image = match images.get(handle) {
             Some(image) => image,
             None => {
-                error!("there is not noise texture");
+                error!("there is not noise texture {handle:?}");
                 return;
             }
         };

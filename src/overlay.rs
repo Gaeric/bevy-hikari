@@ -3,20 +3,14 @@ use std::ops::Range;
 use crate::{
     light::LightPassTarget,
     prepass::{PrepassTarget, DEBUG_FORMAT},
-    OVERLAY_SHADER_HANDLE, QUAD_HANDLE,
 };
 use bevy::{
+    prelude::*,
     asset::load_internal_asset,
-    core_pipeline::{
-        clear_color::ClearColorConfig, fullscreen_vertex_shader::fullscreen_shader_vertex_state,
-    },
+    core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,
     ecs::system::{lifetimeless::SRes, SystemParamItem},
-    pbr::{DrawMesh, MeshPipelineKey, SetMeshViewBindGroup},
-    prelude::{shape::Quad, *},
     render::{
         camera::ExtractedCamera,
-        mesh::MeshVertexBufferLayout,
-        render_asset::RenderAssets,
         render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_phase::{
             AddRenderCommand, CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions,
@@ -25,7 +19,6 @@ use bevy::{
         },
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
-        texture::BevyDefault,
         view::ViewTarget,
         Extract, Render, RenderApp, RenderSet,
     },
@@ -38,8 +31,6 @@ pub const OVERLAY_DEBUG_SHADER_HANDLE: Handle<Shader> =
 pub struct OverlayPlugin;
 impl Plugin for OverlayPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup);
-
         load_internal_asset!(
             app,
             OVERLAY_DEBUG_SHADER_HANDLE,
@@ -71,11 +62,6 @@ impl Plugin for OverlayPlugin {
         app.sub_app_mut(RenderApp)
             .init_resource::<OverlayPipeline>();
     }
-}
-
-fn setup(mut meshes: ResMut<Assets<Mesh>>) {
-    let mesh: Mesh = Quad::new(Vec2::new(2.0, 2.0)).into();
-    meshes.insert(QUAD_HANDLE, mesh);
 }
 
 #[derive(Resource)]
@@ -117,13 +103,14 @@ impl FromWorld for OverlayPipeline {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OverlayPipelineKey;
+
 // [0.8] refer MeshPipeline
 impl SpecializedRenderPipeline for OverlayPipeline {
-    type Key = MeshPipelineKey;
+    type Key = OverlayPipelineKey;
 
-    fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
-        // let vertex_attributes = vec![Mesh::ATTRIBUTE_POSITION.at_shader_location(0)];
-        // let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
+    fn specialize(&self, _key: Self::Key) -> RenderPipelineDescriptor {
         let bind_group_layout = vec![self.overlay_layout.clone()];
 
         let shader_defs = Vec::new();
@@ -136,11 +123,6 @@ impl SpecializedRenderPipeline for OverlayPipeline {
                 shader: OVERLAY_DEBUG_SHADER_HANDLE,
                 shader_defs: shader_defs.clone(),
                 entry_point: "fragment".into(),
-                // targets: vec![Some(ColorTargetState {
-                //     format: TextureFormat::bevy_default(),
-                //     blend: Some(BlendState::ALPHA_BLENDING),
-                //     write_mask: ColorWrites::ALL,
-                // })],
                 targets: vec![Some(ColorTargetState {
                     format: DEBUG_FORMAT,
                     blend: None,
@@ -148,22 +130,9 @@ impl SpecializedRenderPipeline for OverlayPipeline {
                 })],
             }),
             push_constant_ranges: Vec::new(),
-            primitive: PrimitiveState {
-                topology: key.primitive_topology(),
-                strip_index_format: None,
-                front_face: FrontFace::Ccw,
-                cull_mode: None,
-                unclipped_depth: false,
-                polygon_mode: PolygonMode::Fill,
-                conservative: false,
-            },
+            primitive: PrimitiveState::default(),
             depth_stencil: None,
             multisample: MultisampleState::default(),
-            // multisample: MultisampleState {
-            //     count: key.msaa_samples(),
-            //     mask: !0,
-            //     alpha_to_coverage_enabled: false,
-            // },
         }
     }
 }
@@ -185,7 +154,7 @@ fn extract_overlay_camera_phases(
 fn prepare_overlay_bind_group(
     render_device: Res<RenderDevice>,
     pipeline: Res<OverlayPipeline>,
-    prepass_target: Query<(Entity, &PrepassTarget)>,
+    _prepass_target: Query<(Entity, &PrepassTarget)>,
     query: Query<(Entity, &LightPassTarget)>,
     mut overlay_bind_group: ResMut<OverlayBindGroup>,
 ) {
@@ -228,33 +197,28 @@ fn prepare_overlay_bind_group(
 
 #[allow(clippy::too_many_arguments)]
 fn queue_overlay_mesh(
-    mut commands: Commands,
-    msaa: Res<Msaa>,
     draw_functions: Res<DrawFunctions<Overlay>>,
-    render_meshes: Res<RenderAssets<Mesh>>,
     overlay_pipeline: Res<OverlayPipeline>,
     mut pipelines: ResMut<SpecializedRenderPipelines<OverlayPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
-    mut views: Query<&mut RenderPhase<Overlay>>,
+    mut views: Query<(Entity, &mut RenderPhase<Overlay>)>,
 ) {
     let draw_function = draw_functions.read().get_id::<DrawOverlay>().unwrap();
-    for mut overlay_phase in &mut views {
-        let mesh_handle = QUAD_HANDLE;
-        if let Some(mesh) = render_meshes.get(&mesh_handle) {
-            let key = MeshPipelineKey::from_msaa_samples(msaa.samples())
-                | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
-            let pipeline_id = pipelines.specialize(&mut pipeline_cache, &overlay_pipeline, key);
+    for (entity, mut overlay_phase) in &mut views {
+        let pipeline_id = pipelines.specialize(
+            &mut pipeline_cache,
+            &overlay_pipeline,
+            OverlayPipelineKey {},
+        );
 
-            let entity = commands.spawn_empty().insert(mesh_handle.clone()).id();
-            overlay_phase.add(Overlay {
-                distance: 0.0,
-                entity,
-                pipeline: pipeline_id,
-                draw_function,
-                batch_range: 0..1,
-                dynamic_offset: None,
-            });
-        }
+        overlay_phase.add(Overlay {
+            distance: 0.0,
+            entity,
+            pipeline: pipeline_id,
+            draw_function,
+            batch_range: 0..1,
+            dynamic_offset: None,
+        });
     }
 }
 
@@ -357,7 +321,7 @@ impl ViewNode for OverlayPassNode {
         &self,
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (camera, overlay_phase, camera_3d, target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
+        (camera, overlay_phase, _camera_3d, target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         trace!("overlay pass node run");

@@ -1,9 +1,7 @@
 use bevy::{
     asset::load_internal_asset,
-    core_pipeline::upscaling::UpscalingNode,
     prelude::*,
     render::{
-        extract_resource::ExtractResource,
         render_graph::{RenderGraphApp, ViewNodeRunner},
         RenderApp,
     },
@@ -71,11 +69,6 @@ impl Default for HikariPlugin {
     }
 }
 
-// [0.8] refer from compute_shader_game_of_life GameOfLifeImage
-//
-#[derive(Clone, Deref, DerefMut, Resource, ExtractResource)]
-pub struct NoiseTexture(pub Vec<Handle<Image>>);
-
 // [0.8] refer PbrPlugin
 impl Plugin for HikariPlugin {
     fn build(&self, app: &mut App) {
@@ -116,17 +109,6 @@ impl Plugin for HikariPlugin {
             Shader::from_wgsl
         );
 
-        let noise_path = self.noise_folder.clone();
-        let load_system = move |mut commands: Commands, asset_server: Res<AssetServer>| {
-            let handles = (0..NOISE_TEXTURE_COUNT)
-                .map(|id| {
-                    let name = format!("{}/LDR_RGBA_{}.png", noise_path, id);
-                    asset_server.load(&name)
-                })
-                .collect();
-            commands.insert_resource(NoiseTexture(handles));
-        };
-
         app.add_plugins((
             TransformPlugin,
             ViewPlugin,
@@ -134,8 +116,7 @@ impl Plugin for HikariPlugin {
             PrepassPlugin,
             LightPlugin,
             OverlayPlugin,
-        ))
-        .add_systems(Startup, load_system);
+        ));
 
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => render_app,
@@ -152,12 +133,7 @@ impl Plugin for HikariPlugin {
             .add_render_graph_node::<ViewNodeRunner<OverlayPassNode>>(
                 graph::NAME,
                 graph::node::OVERLAY_PASS,
-            )
-            // .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(
-            //     graph::NAME,
-            //     graph::node::UPSCALING,
-            // )
-;
+            );
 
         render_app.add_render_graph_edges(
             graph::NAME,
@@ -165,7 +141,6 @@ impl Plugin for HikariPlugin {
                 graph::node::PREPASS,
                 graph::node::LIGHT_PASS,
                 graph::node::OVERLAY_PASS,
-                // graph::node::UPSCALING,
             ],
         );
     }
