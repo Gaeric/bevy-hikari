@@ -5,10 +5,10 @@ use crate::{
     prepass::{PrepassTarget, DEBUG_FORMAT},
 };
 use bevy::{
-    prelude::*,
     asset::load_internal_asset,
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,
     ecs::system::{lifetimeless::SRes, SystemParamItem},
+    prelude::*,
     render::{
         camera::ExtractedCamera,
         render_graph::{NodeRunError, RenderGraphContext, ViewNode},
@@ -177,17 +177,21 @@ fn prepare_overlay_bind_group(
     // }
     for (entity, target) in &query {
         trace!("over bind group entity is {:?}", entity);
+        // let texture_view = &target.render.texture_view;
+        // let sampler = &target.render.sampler;
+        let texture = &target.reservoir[0].random;
+
         let bind_group = render_device.create_bind_group(
             None,
             &pipeline.overlay_layout,
             &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&target.render.texture_view),
+                    resource: BindingResource::TextureView(&texture.texture_view),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(&target.render.sampler),
+                    resource: BindingResource::Sampler(&texture.sampler),
                 },
             ],
         );
