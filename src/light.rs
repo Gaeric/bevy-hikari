@@ -44,10 +44,10 @@ impl Plugin for LightPlugin {
                     Render,
                     (
                         prepare_light_pass_targets.in_set(RenderSet::PrepareAssets),
-                        debug_query.in_set(RenderSet::Queue),
+                        // debug_query.in_set(RenderSet::Queue),
                         prepare_frame_uniform.in_set(RenderSet::Prepare),
-                        queue_view_bind_groups.in_set(RenderSet::Queue),
-                        queue_light_bind_groups.in_set(RenderSet::Queue),
+                        queue_view_bind_groups.in_set(RenderSet::PrepareBindGroups),
+                        queue_light_bind_groups.in_set(RenderSet::PrepareBindGroups),
                         queue_light_pipelines.in_set(RenderSet::Queue),
                     ),
                 );
@@ -522,7 +522,7 @@ fn prepare_light_pass_targets(
                 sample_normal: create_texture(NORMAL_TEXTURE_FORMAT, FilterMode::Nearest),
             });
 
-            info!("prepare LightPassTarget");
+            trace!("prepare LightPassTarget");
 
             commands.entity(entity).insert(LightPassTarget {
                 render: create_texture(RADIANCE_TEXTURE_FORMAT, FilterMode::Linear),
@@ -652,6 +652,7 @@ pub fn queue_view_bind_groups(
                 &entries,
             );
 
+            debug!("insert ViewBindGroup finish");
             commands.entity(entity).insert(ViewBindGroup(bind_group));
         }
     }
@@ -716,9 +717,9 @@ fn queue_light_bind_groups(
         ..Default::default()
     });
 
-    info!("queue PrepassTarget and LightPassTarget for create light bind group");
+    debug!("queue PrepassTarget and LightPassTarget for create light bind group");
     for (entity, prepass, light_pass) in &query {
-        info!("create light pass bind group");
+        trace!("create light pass bind group");
         if let Some(frame_binding) = frame_uniform.buffer.binding() {
             let deferred = render_device.create_bind_group(
                 None,
@@ -856,6 +857,7 @@ fn queue_light_bind_groups(
                 ],
             );
 
+            trace!("insert LightBindGroup finish");
             commands.entity(entity).insert(LightBindGroup {
                 deferred,
                 frame,
@@ -884,13 +886,19 @@ impl ViewNode for LightPassNode {
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
         (camera, view_uniform, view_lights, view_bind_group, light_bind_group): bevy::ecs::query::QueryItem<Self::ViewQuery>,
+        // (camera, view_uniform, view_lights, view_bind_group): bevy::ecs::query::QueryItem<
+        //     Self::ViewQuery,
+        // >,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let _view_entity = graph.view_entity();
 
         let mesh_material_bind_group = match world.get_resource::<MeshMaterialBindGroup>() {
             Some(bind_group) => bind_group,
-            None => return Ok(()),
+            None => {
+                info!("mesh material bind group not exists");
+                return Ok(());
+            }
         };
         let pipelines = world.resource::<CachedLightPipelines>();
         let pipeline_cache = world.resource::<PipelineCache>();
@@ -911,7 +919,11 @@ impl ViewNode for LightPassNode {
         pass.set_bind_group(4, &light_bind_group.frame, &[]);
         pass.set_bind_group(5, &light_bind_group.render, &[]);
 
+        trace!("light pass node set bindgroup finish");
+
         if let Some(pipeline) = pipeline_cache.get_compute_pipeline(pipelines.direct_lit) {
+            trace!("dispatch light pipeline compute task");
+
             pass.set_pipeline(pipeline);
 
             let size = camera.physical_target_size.unwrap();

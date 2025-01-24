@@ -347,7 +347,7 @@ fn prepare_prepass_targets(
             let velocity_uv = create_texture(VELOCITY_UV_FORMAT);
             let depth = create_texture(TextureFormat::Depth32Float);
 
-            info!("insert PrepassTarget component");
+            trace!("insert PrepassTarget component");
             commands.entity(entity).insert(PrepassTarget {
                 position,
                 normal,
