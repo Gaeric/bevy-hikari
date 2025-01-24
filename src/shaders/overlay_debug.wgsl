@@ -45,5 +45,5 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let color = textureSample(render_texture_2d, render_sampler, in.uv);
     // let color = vec4(uv, 0.5, 0.5);
     // return tone_mapping(color);
-    return color;
+    return tone_mapping(color);
 }
