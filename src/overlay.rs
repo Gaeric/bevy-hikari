@@ -154,27 +154,29 @@ fn extract_overlay_camera_phases(
 fn prepare_overlay_bind_group(
     render_device: Res<RenderDevice>,
     pipeline: Res<OverlayPipeline>,
-    _prepass_target: Query<(Entity, &PrepassTarget)>,
+    prepass_target: Query<(Entity, &PrepassTarget)>,
     query: Query<(Entity, &LightPassTarget)>,
     mut overlay_bind_group: ResMut<OverlayBindGroup>,
 ) {
     // for (_entity, prepass_target) in &prepass_target {
+    //     let texture = &prepass_target.instance_material;
     //     let bind_group = render_device.create_bind_group(
     //         None,
     //         &pipeline.overlay_layout,
     //         &[
     //             BindGroupEntry {
     //                 binding: 0,
-    //                 resource: BindingResource::TextureView(&prepass_target.position.texture_view),
+    //                 resource: BindingResource::TextureView(&texture.texture_view),
     //             },
     //             BindGroupEntry {
     //                 binding: 1,
-    //                 resource: BindingResource::Sampler(&prepass_target.position.sampler),
+    //                 resource: BindingResource::Sampler(&texture.sampler),
     //             },
     //         ],
     //     );
     //     overlay_bind_group.bind_group = Some(bind_group);
     // }
+
     for (entity, target) in &query {
         trace!("over bind group entity is {:?}", entity);
         // let texture_view = &target.render.texture_view;
