@@ -1,8 +1,8 @@
-use crate::{light::LightPassTarget, OVERLAY_SHADER_HANDLE};
+use crate::{light::LightPassTarget, prepass::PrepassTarget, OVERLAY_SHADER_HANDLE};
 use bevy::{
-    prelude::*,
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,
     ecs::system::{lifetimeless::Read, SystemParamItem},
+    prelude::*,
     render::{
         camera::ExtractedCamera,
         render_graph::{NodeRunError, RenderGraphContext, ViewNode},
@@ -144,10 +144,30 @@ fn queue_overlay_bind_groups(
     render_device: Res<RenderDevice>,
     pipeline: Res<OverlayPipeline>,
     query: Query<(Entity, &LightPassTarget)>,
+    prepass_target: Query<(Entity, &PrepassTarget)>,
 ) {
+    // for (entity, prepass_target) in &prepass_target {
+    //     let texture = &prepass_target.depth;
+    //     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+    //         label: None,
+    //         layout: &pipeline.overlay_layout,
+    //         entries: &[
+    //             BindGroupEntry {
+    //                 binding: 0,
+    //                 resource: BindingResource::TextureView(&texture.texture_view),
+    //             },
+    //             BindGroupEntry {
+    //                 binding: 1,
+    //                 resource: BindingResource::Sampler(&texture.sampler),
+    //             },
+    //         ],
+    //     });
+    //     commands.entity(entity).insert(OverlayBindGroup(bind_group));
+    // }
+
     for (entity, target) in &query {
-        // let texture = &target.reservoir[0].random;
-        let texture = &target.render;
+        let texture = &target.reservoir[0].random;
+        // let texture = &target.render;
 
         let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
             label: None,
