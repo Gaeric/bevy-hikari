@@ -1,6 +1,5 @@
 use bevy::{
     asset::load_internal_asset,
-    core_pipeline::upscaling::UpscalingNode,
     prelude::*,
     reflect::TypeUuid,
     render::{
@@ -54,8 +53,6 @@ pub const LIGHT_SHADER_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 9657319286592943583);
 pub const OVERLAY_SHADER_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 10969344919103020615);
-pub const QUAD_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Mesh::TYPE_UUID, 4740146776519512271);
 
 pub struct HikariPlugin {
     noise_folder: String,
@@ -158,10 +155,6 @@ impl Plugin for HikariPlugin {
             .add_render_graph_node::<ViewNodeRunner<OverlayPassNode>>(
                 graph::NAME,
                 graph::node::OVERLAY_PASS,
-            )
-            .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(
-                graph::NAME,
-                graph::node::UPSCALING,
             );
 
         render_app.add_render_graph_edges(
@@ -170,7 +163,6 @@ impl Plugin for HikariPlugin {
                 graph::node::PREPASS,
                 graph::node::LIGHT_PASS,
                 graph::node::OVERLAY_PASS,
-                graph::node::UPSCALING,
             ],
         );
     }
