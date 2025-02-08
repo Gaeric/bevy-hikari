@@ -125,7 +125,7 @@ impl SpecializedRenderPipeline for OverlayPipeline {
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
                     format: DEBUG_FORMAT,
-                    blend: None,
+                    blend: Some(BlendState::ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 })],
             }),
