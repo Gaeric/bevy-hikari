@@ -1,15 +1,10 @@
-use std::any::TypeId;
-
 use bevy::{
-    asset::{load_internal_asset, UntypedAssetId},
-    core_pipeline::upscaling::UpscalingNode,
+    asset::load_internal_asset,
     prelude::*,
     render::{
-        extract_resource::ExtractResource,
         render_graph::{RenderGraphApp, ViewNodeRunner},
         RenderApp,
     },
-    utils::Uuid,
 };
 
 use light::{LightPassNode, LightPlugin};
@@ -36,7 +31,6 @@ pub mod graph {
         pub const PREPASS: &str = "prepass";
         pub const LIGHT_PASS: &str = "light_direct_pass";
         pub const OVERLAY_PASS: &str = "overlay_pass";
-        pub const UPSCALING: &str = "upscaling";
     }
 }
 
@@ -49,38 +43,8 @@ pub const MESH_MATERIAL_BINDINGS_HANDLE: Handle<Shader> = Handle::weak_from_u128
 pub const DEFERRED_BINDINGS_HANDLE: Handle<Shader> = Handle::weak_from_u128(14467895678105108252);
 pub const PREPASS_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(4693612430004931427);
 pub const LIGHT_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(9657319286592943583);
-pub const OVERLAY_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(10969344919103020615);
 
-pub const QUAD_HANDLE: Handle<Mesh> = Handle::weak_from_u128(4740146776519512271);
-// pub const QUAD_HANDLE: UntypedHandle = UntypedHandle::Weak(UntypedAssetId::Uuid {
-//     type_id: TypeId::of::<Mesh>(),
-//     uuid: Uuid::from_u128(4740146776519512271),
-// });
-
-pub struct HikariPlugin {
-    noise_folder: String,
-}
-
-impl HikariPlugin {
-    pub fn new(noise_folder: &str) -> Self {
-        Self {
-            noise_folder: noise_folder.into(),
-        }
-    }
-}
-
-impl Default for HikariPlugin {
-    fn default() -> Self {
-        Self {
-            noise_folder: "textures/blue_noise".into(),
-        }
-    }
-}
-
-// [0.8] refer from compute_shader_game_of_life GameOfLifeImage
-//
-#[derive(Clone, Deref, DerefMut, Resource, ExtractResource)]
-pub struct NoiseTexture(pub Vec<Handle<Image>>);
+pub struct HikariPlugin; 
 
 // [0.8] refer PbrPlugin
 impl Plugin for HikariPlugin {
@@ -115,23 +79,6 @@ impl Plugin for HikariPlugin {
             "shaders/light.wgsl",
             Shader::from_wgsl
         );
-        load_internal_asset!(
-            app,
-            OVERLAY_SHADER_HANDLE,
-            "shaders/overlay.wgsl",
-            Shader::from_wgsl
-        );
-
-        let noise_path = self.noise_folder.clone();
-        let load_system = move |mut commands: Commands, asset_server: Res<AssetServer>| {
-            let handles = (0..NOISE_TEXTURE_COUNT)
-                .map(|id| {
-                    let name = format!("{}/LDR_RGBA_{}.png", noise_path, id);
-                    asset_server.load(&name)
-                })
-                .collect();
-            commands.insert_resource(NoiseTexture(handles));
-        };
 
         app.add_plugins((
             TransformPlugin,
@@ -140,8 +87,7 @@ impl Plugin for HikariPlugin {
             PrepassPlugin,
             LightPlugin,
             OverlayPlugin,
-        ))
-        .add_systems(Startup, load_system);
+        ));
 
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => render_app,
@@ -158,10 +104,6 @@ impl Plugin for HikariPlugin {
             .add_render_graph_node::<ViewNodeRunner<OverlayPassNode>>(
                 graph::NAME,
                 graph::node::OVERLAY_PASS,
-            )
-            .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(
-                graph::NAME,
-                graph::node::UPSCALING,
             );
 
         render_app.add_render_graph_edges(
@@ -170,7 +112,6 @@ impl Plugin for HikariPlugin {
                 graph::node::PREPASS,
                 graph::node::LIGHT_PASS,
                 graph::node::OVERLAY_PASS,
-                graph::node::UPSCALING,
             ],
         );
     }

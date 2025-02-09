@@ -3,21 +3,21 @@
 
 #import bevy_hikari::mesh_material_bindings
 #import bevy_hikari::overlay
-#import bevy_pbr::utils               PI
+#import bevy_pbr::utils::PI
 
-#import bevy_pbr::mesh_view_bindings  lights
-#import bevy_pbr::mesh_view_bindings  view
-#import bevy_pbr::mesh_view_types DirectionalLight
+#import bevy_pbr::mesh_view_bindings::lights
+#import bevy_pbr::mesh_view_bindings::view
+#import bevy_pbr::mesh_view_types::DirectionalLight
 
-#import bevy_hikari::mesh_material_types Instance
-#import bevy_hikari::mesh_material_types Slice
-#import bevy_hikari::mesh_material_bindings asset_node_buffer
-#import bevy_hikari::mesh_material_bindings primitive_buffer
-#import bevy_hikari::mesh_material_bindings vertex_buffer
-#import bevy_hikari::mesh_material_bindings instance_buffer
-#import bevy_hikari::mesh_material_bindings instance_node_buffer
-#import bevy_hikari::mesh_material_bindings material_buffer
-#import bevy_hikari::overlay luminance
+#import bevy_hikari::mesh_material_types::Instance
+#import bevy_hikari::mesh_material_types::Slice
+#import bevy_hikari::mesh_material_bindings::asset_node_buffer
+#import bevy_hikari::mesh_material_bindings::primitive_buffer
+#import bevy_hikari::mesh_material_bindings::vertex_buffer
+#import bevy_hikari::mesh_material_bindings::instance_buffer
+#import bevy_hikari::mesh_material_bindings::instance_node_buffer
+#import bevy_hikari::mesh_material_bindings::material_buffer
+#import bevy_hikari::overlay::luminance
 
 #import bevy_hikari::deferred_bindings as deferred
 
@@ -153,6 +153,21 @@ struct Reservoir {
     w_sum: f32,
     count: f32,
 };
+
+fn debug_random_texture(s: Sample, coords: vec2<i32>) {
+  var r: Reservoir;
+  r.s = s;
+  // r.s.random = vec4<f32>(s.random.xyz, 1.0);
+  r.count = 0.0;
+  r.w = 0.0;
+  r.w_sum = 0.0;
+  store_reservoir(coords, r);
+  textureStore(render_texture, coords, vec4<f32>(0.0));
+}
+
+fn old_light_shadow_normal_bias() -> f32 {
+  return sqrt(2.0) * 0.6;
+}
 
 fn instance_position_world_to_local(instance: Instance, world_position: vec3<f32>) -> vec3<f32> {
     let inverse_model = transpose(instance.inverse_transpose_model);
@@ -578,6 +593,14 @@ fn direct_lit(
         textureStore(render_texture, coords, vec4<f32>(0.0));
         return;
     }
+
+    // debug for random texture
+    // if (position.w >= 0.5) {
+    //   s.random = vec4(uv.x, uv.y, 0.0, 1.0);
+    //   debug_random_texture(s, coords);
+    //   return;
+    // }
+
     let ndc = view.view_proj * position;
     let depth = ndc.z / ndc.w;
     let view_direction = calculate_view(position, view.projection[3].w == 1.0);
@@ -586,6 +609,17 @@ fn direct_lit(
     let instance_material = textureLoad(deferred::instance_material_texture, coords, 0);
     let velocity_uv = textureSampleLevel(deferred::velocity_uv_texture, deferred::velocity_uv_sampler, uv, 0.0);
     let surface = retreive_surface(instance_material.y, velocity_uv.zw);
+
+    // check surface data
+    // if (position.w >= 0.5) {
+    //   // s.random = velocity_uv;
+    //   s.random = vec4(surface.reflectance, 0.0, 0.0, 1.0);
+    //   // s.random = surface.base_color;
+    //   // s.random = surface.emissive;
+    //   debug_random_texture(s, coords);
+    //   return;
+    // }
+
 
     // let hashed_frame_number = hash(frame.number);
     // s.random.x = random_float(invocation_id.x * hash(invocation_id.y) ^ hashed_frame_number);
@@ -600,6 +634,11 @@ fn direct_lit(
     s.random = textureSampleLevel(noise_texture[noise_id], noise_sampler, noise_uv, 0.0);
     s.random = fract(s.random + noise_temporal_offset * GOLDEN_RATIO);
 
+    // if (position.w >= 0.5) {
+    //   debug_random_texture(s, coords);
+    //   return;
+    // }
+
     s.radiance = 255.0 * surface.emissive.a * surface.emissive.rgb;
     s.visible_position = vec4<f32>(position.xyz, depth);
     s.visible_normal = normal;
@@ -612,7 +651,8 @@ fn direct_lit(
     var info: HitInfo;
     var bounce_info: HitInfo;
 
-    ray.origin = position.xyz + normal * light.shadow_normal_bias;
+    // ray.origin = position.xyz + normal * light.shadow_normal_bias;
+    ray.origin = position.xyz + normal * old_light_shadow_normal_bias();
     ray.direction = normal_basis(normal) * cosine_sample_hemisphere(s.random.xy);
     ray.inv_direction = 1.0 / ray.direction;
     let p1 = dot(ray.direction, normal);
@@ -622,15 +662,29 @@ fn direct_lit(
     s.sample_position = info.position;
     s.sample_normal = info.normal;
 
+    // if (position.w >= 0.5) {
+    //   // s.random = info.position;
+    //   // s.random = vec4(light.shadow_normal_bias, 0.0, 0.0, 1.0);
+    //   s.random = vec4(sqrt(2.0) * 0.6, 0.0, 0.0, 1.0);
+    //   debug_random_texture(s, coords);
+    //   return;
+    // }
+
     // Second bounce: from sample position
     let b2_rand = random_float(workgroup_id.x + workgroup_id.y * num_workgroups.x + hash(frame.number));
     let b2_condition = max(0.0, sign(SECOND_BOUNCE_CHANCE - b2_rand));  // 1.0 if b2_rand < SECOND_BOUNCE_CHANCE
     s.random *= vec4<f32>(1.0, 1.0, b2_condition, b2_condition);
 
+    // if (position.w >= 0.5) {
+    //   debug_random_texture(s, coords);
+    //   return;
+    // }
+
     var p2 = 1.0;
     var head_radiance = vec3<f32>(0.0);
     if (any(s.random.zw > vec2<f32>(0.0)) && hit.instance_index != U32_MAX) {
-        bounce_ray.origin = info.position.xyz + info.normal * light.shadow_normal_bias;
+        // bounce_ray.origin = info.position.xyz + info.normal * light.shadow_normal_bias;
+        bounce_ray.origin = info.position.xyz + info.normal * old_light_shadow_normal_bias();
         bounce_ray.direction = normal_basis(info.normal) * cosine_sample_hemisphere(s.random.zw);
         bounce_ray.inv_direction = 1.0 / bounce_ray.direction;
         p2 = dot(bounce_ray.direction, info.normal) * SECOND_BOUNCE_CHANCE;
@@ -673,7 +727,8 @@ fn direct_lit(
 
     // Sample validation: is the temporally reused path xv-xs still valid?
     if (frame.number % VALIDATION_INTERVAL == 0u && distance(s.sample_position, r.s.sample_position) > 0.1) {
-        ray.origin = position.xyz + light.shadow_normal_bias * normal;
+        // ray.origin = position.xyz + light.shadow_normal_bias * normal;
+        ray.origin = position.xyz + old_light_shadow_normal_bias() * normal;
         ray.direction = normal_basis(normal) * cosine_sample_hemisphere(r.s.random.xy);
         ray.inv_direction = 1.0 / ray.direction;
         hit = traverse_top(ray);
@@ -681,7 +736,8 @@ fn direct_lit(
         var valid_radiance = 255.0 * surface.emissive.a * surface.emissive.rgb;
 
         if (any(r.s.random.zw > vec2<f32>(0.0)) && hit.instance_index != U32_MAX) {
-            bounce_ray.origin = info.position.xyz + info.normal * light.shadow_normal_bias;
+            // bounce_ray.origin = info.position.xyz + info.normal * light.shadow_normal_bias;
+            bounce_ray.origin = info.position.xyz + info.normal * old_light_shadow_normal_bias();
             bounce_ray.direction = normal_basis(info.normal) * cosine_sample_hemisphere(r.s.random.zw);
             bounce_ray.inv_direction = 1.0 / bounce_ray.direction;
 

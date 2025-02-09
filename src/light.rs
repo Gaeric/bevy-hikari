@@ -1,7 +1,7 @@
 use crate::{
     mesh_material::{MeshMaterialBindGroup, MeshMaterialBindGroupLayout, TextureBindGroupLayout},
     prepass::PrepassTarget,
-    NoiseTexture, LIGHT_SHADER_HANDLE, NOISE_TEXTURE_COUNT, WORKGROUP_SIZE,
+    LIGHT_SHADER_HANDLE, NOISE_TEXTURE_COUNT, WORKGROUP_SIZE,
 };
 use bevy::{
     pbr::{
@@ -11,7 +11,7 @@ use bevy::{
     prelude::*,
     render::{
         camera::ExtractedCamera,
-        extract_resource::ExtractResourcePlugin,
+        extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::RenderAssets,
         render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_resource::*,
@@ -30,10 +30,16 @@ pub const POSITION_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
 pub const NORMAL_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8Snorm;
 pub const RANDOM_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 
+// [0.8] refer from compute_shader_game_of_life GameOfLifeImage
+//
+#[derive(Clone, Deref, DerefMut, Resource, ExtractResource)]
+pub struct NoiseTexture(pub Vec<Handle<Image>>);
+
 pub struct LightPlugin;
 impl Plugin for LightPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(ExtractResourcePlugin::<NoiseTexture>::default());
+        app.add_plugins(ExtractResourcePlugin::<NoiseTexture>::default())
+            .add_systems(Startup, noise_load);
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
@@ -43,10 +49,11 @@ impl Plugin for LightPlugin {
                 .add_systems(
                     Render,
                     (
-                        prepare_light_pass_targets.in_set(RenderSet::Prepare),
-                        (prepare_frame_uniform.in_set(RenderSet::Prepare)),
-                        queue_view_bind_groups.in_set(RenderSet::Queue),
-                        queue_light_bind_groups.in_set(RenderSet::Queue),
+                        prepare_light_pass_targets.in_set(RenderSet::PrepareAssets),
+                        // debug_query.in_set(RenderSet::Queue),
+                        prepare_frame_uniform.in_set(RenderSet::Prepare),
+                        queue_view_bind_groups.in_set(RenderSet::PrepareBindGroups),
+                        queue_light_bind_groups.in_set(RenderSet::PrepareBindGroups),
                         queue_light_pipelines.in_set(RenderSet::Queue),
                     ),
                 );
@@ -56,6 +63,17 @@ impl Plugin for LightPlugin {
     fn finish(&self, app: &mut App) {
         app.sub_app_mut(RenderApp).init_resource::<LightPipeline>();
     }
+}
+
+pub fn noise_load(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let noise_path = "textures/blue_noise";
+    let handles = (0..NOISE_TEXTURE_COUNT)
+        .map(|id| {
+            let name = format!("{}/LDR_RGBA_{}.png", noise_path, id);
+            asset_server.load(&name)
+        })
+        .collect();
+    commands.insert_resource(NoiseTexture(handles));
 }
 
 // [0.8] refer MeshPipeline
@@ -443,6 +461,7 @@ impl SpecializedComputePipeline for LightPipeline {
     }
 }
 
+#[derive(Debug)]
 pub struct Reservoir {
     pub reservoir: GpuImage,
     pub radiance: GpuImage,
@@ -453,7 +472,7 @@ pub struct Reservoir {
     pub sample_normal: GpuImage,
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct LightPassTarget {
     pub render: GpuImage,
     pub reservoir: [Reservoir; 2],
@@ -519,6 +538,8 @@ fn prepare_light_pass_targets(
                 sample_position: create_texture(POSITION_TEXTURE_FORMAT, FilterMode::Nearest),
                 sample_normal: create_texture(NORMAL_TEXTURE_FORMAT, FilterMode::Nearest),
             });
+
+            trace!("prepare LightPassTarget");
 
             commands.entity(entity).insert(LightPassTarget {
                 render: create_texture(RADIANCE_TEXTURE_FORMAT, FilterMode::Linear),
@@ -648,6 +669,7 @@ pub fn queue_view_bind_groups(
                 &entries,
             );
 
+            debug!("insert ViewBindGroup finish");
             commands.entity(entity).insert(ViewBindGroup(bind_group));
         }
     }
@@ -658,6 +680,24 @@ pub struct LightBindGroup {
     pub deferred: BindGroup,
     pub frame: BindGroup,
     pub render: BindGroup,
+}
+
+fn debug_query(
+    light_pass_query: Query<(Entity, &LightPassTarget)>,
+    prepass_query: Query<(Entity, &PrepassTarget)>,
+    cascade_query: Query<(Entity, &PrepassTarget, &LightPassTarget)>,
+) {
+    for (entity, demo_data) in &prepass_query {
+        info!("entity with prepass target data is {:?}", entity)
+    }
+
+    for (entity, demo_data) in &light_pass_query {
+        info!("entity with light pass data is {:?}", entity)
+    }
+
+    for (entity, pprepass, light_pass) in &cascade_query {
+        info!("entity with light pass and target is {entity:?}");
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -676,6 +716,7 @@ fn queue_light_bind_groups(
         let image = match images.get(handle) {
             Some(image) => image,
             None => {
+                debug!("there is not noise texture {handle:?}");
                 return;
             }
         };
@@ -693,7 +734,9 @@ fn queue_light_bind_groups(
         ..Default::default()
     });
 
+    debug!("queue PrepassTarget and LightPassTarget for create light bind group");
     for (entity, prepass, light_pass) in &query {
+        trace!("create light pass bind group");
         if let Some(frame_binding) = frame_uniform.buffer.binding() {
             let deferred = render_device.create_bind_group(
                 None,
@@ -831,6 +874,7 @@ fn queue_light_bind_groups(
                 ],
             );
 
+            trace!("insert LightBindGroup finish");
             commands.entity(entity).insert(LightBindGroup {
                 deferred,
                 frame,
@@ -859,13 +903,19 @@ impl ViewNode for LightPassNode {
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
         (camera, view_uniform, view_lights, view_bind_group, light_bind_group): bevy::ecs::query::QueryItem<Self::ViewQuery>,
+        // (camera, view_uniform, view_lights, view_bind_group): bevy::ecs::query::QueryItem<
+        //     Self::ViewQuery,
+        // >,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let _view_entity = graph.view_entity();
 
         let mesh_material_bind_group = match world.get_resource::<MeshMaterialBindGroup>() {
             Some(bind_group) => bind_group,
-            None => return Ok(()),
+            None => {
+                info!("mesh material bind group not exists");
+                return Ok(());
+            }
         };
         let pipelines = world.resource::<CachedLightPipelines>();
         let pipeline_cache = world.resource::<PipelineCache>();
@@ -886,7 +936,11 @@ impl ViewNode for LightPassNode {
         pass.set_bind_group(4, &light_bind_group.frame, &[]);
         pass.set_bind_group(5, &light_bind_group.render, &[]);
 
+        trace!("light pass node set bindgroup finish");
+
         if let Some(pipeline) = pipeline_cache.get_compute_pipeline(pipelines.direct_lit) {
+            trace!("dispatch light pipeline compute task");
+
             pass.set_pipeline(pipeline);
 
             let size = camera.physical_target_size.unwrap();

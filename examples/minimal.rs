@@ -13,7 +13,7 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(HikariPlugin::default())
+        .add_plugins(HikariPlugin)
         .add_systems(Startup, setup)
         .run();
 }
@@ -70,6 +70,36 @@ fn setup(
         transform: Transform::from_xyz(2.0, 0.5, 0.0),
         ..Default::default()
     });
+
+    // commands.spawn(PbrBundle {
+    //     mesh: meshes.add(Mesh::from(shape::UVSphere {
+    //         radius: 0.5,
+    //         ..Default::default()
+    //     })),
+    //     material: materials.add(StandardMaterial {
+    //         base_color_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
+    //         emissive: Color::rgba(1.0, 1.0, 1.0, 0.1),
+    //         emissive_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
+    //         ..Default::default()
+    //     }),
+    //     transform: Transform::from_xyz(-2.0, 0.5, 0.0),
+    //     ..Default::default()
+    // });
+
+    // commands.spawn(PbrBundle {
+    //     mesh: meshes.add(Mesh::from(shape::UVSphere {
+    //         radius: 0.5,
+    //         ..Default::default()
+    //     })),
+    //     material: materials.add(StandardMaterial {
+    //         base_color_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
+    //         emissive: Color::rgba(1.0, 1.0, 1.0, 0.1),
+    //         emissive_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
+    //         ..Default::default()
+    //     }),
+    //     transform: Transform::from_xyz(0.0, 0.5, 3.0),
+    //     ..Default::default()
+    // });
     // comment for clear scene
     // Model
     // commands.spawn(SceneBundle {
@@ -79,7 +109,7 @@ fn setup(
     // });
 
     // Only directional light is supported
-    const HALF_SIZE: f32 = 5.0;
+    // const HALF_SIZE: f32 = 5.0;
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: 100000.0,

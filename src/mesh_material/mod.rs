@@ -280,6 +280,8 @@ impl GpuMesh {
             _ => Err(PrepareMeshError::IncompatiblePrimitiveTopology),
         }?;
 
+        // info!("gpu primitives is {:?}", primitives);
+
         let bvh = BVH::build(&mut primitives);
         let nodes = bvh.flatten_custom(&|aabb, entry_index, exit_index, primitive_index| GpuNode {
             min: aabb.min.to_array().into(),
@@ -408,7 +410,7 @@ fn prepare_texture_bind_group_layout(
     render_device: Res<RenderDevice>,
     materials: Res<MaterialRenderAssets>,
 ) {
-    error!("prepare texture bind group layout");
+    trace!("prepare texture bind group layout");
 
     let count = materials.textures.len();
     let layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {

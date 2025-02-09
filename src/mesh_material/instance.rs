@@ -285,6 +285,8 @@ fn prepare_instances(
     mut instances: ResMut<GpuInstances>,
     asset_state: Res<MeshAssetState>,
 ) {
+    debug!("prepare instances");
+
     if *asset_state == MeshAssetState::Dirty {
         panic!("Mesh assets must be prepared before instances!");
     }
@@ -304,6 +306,7 @@ fn prepare_instances(
                     material: instance.material.value,
                 };
                 let index = render_assets.instance_indices.push(component);
+                debug!("instances: entity: {entity:?}, index: {index:?}");
                 (*entity, (DynamicInstanceIndex(index),))
             })
             .collect();
