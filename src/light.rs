@@ -707,6 +707,7 @@ fn queue_light_bind_groups(
         let image = match images.get(handle) {
             Some(image) => image,
             None => {
+                error!("there is not noise texture {handle:?}");
                 return;
             }
         };

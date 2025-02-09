@@ -71,6 +71,17 @@ const SECOND_BOUNCE_CHANCE: f32 = 1.0;
 
 const SOLAR_ANGLE: f32 = 0.523598776;
 
+fn debug_random_texture(s: Sample, coords: vec2<i32>) {
+  var r: Reservoir;
+  r.s = s;
+  // r.s.random = vec4<f32>(s.random.xyz, 1.0);
+  r.count = 0.0;
+  r.w = 0.0;
+  r.w_sum = 0.0;
+  store_reservoir(coords, r);
+  textureStore(render_texture, coords, vec4<f32>(0.0));
+}
+
 fn hash(value: u32) -> u32 {
     var state = value;
     state = state ^ 2747636419u;
@@ -578,6 +589,14 @@ fn direct_lit(
         textureStore(render_texture, coords, vec4<f32>(0.0));
         return;
     }
+
+    // debug for random texture
+    // if (position.w >= 0.5) {
+    //     s.random = vec4(uv.x, uv.y, 0.0, 1.0);
+    //     debug_random_texture(s, coords);
+    //     return;
+    // }
+
     let ndc = view.view_proj * position;
     let depth = ndc.z / ndc.w;
     let view_direction = calculate_view(position, view.projection[3].w == 1.0);
@@ -586,6 +605,16 @@ fn direct_lit(
     let instance_material = textureLoad(deferred::instance_material_texture, coords, 0);
     let velocity_uv = textureSampleLevel(deferred::velocity_uv_texture, deferred::velocity_uv_sampler, uv, 0.0);
     let surface = retreive_surface(instance_material.y, velocity_uv.zw);
+
+    // check surface data
+    // if (position.w >= 0.5) {
+    //   // s.random = velocity_uv;
+    //   s.random = vec4(surface.reflectance, 0.0, 0.0, 1.0);
+    //   // s.random = surface.base_color;
+    //   // s.random = surface.emissive;
+    //   debug_random_texture(s, coords);
+    //   return;
+    // }
 
     // let hashed_frame_number = hash(frame.number);
     // s.random.x = random_float(invocation_id.x * hash(invocation_id.y) ^ hashed_frame_number);
@@ -599,6 +628,11 @@ fn direct_lit(
     let noise_temporal_offset = f32(frame.number);
     s.random = textureSampleLevel(noise_texture[noise_id], noise_sampler, noise_uv, 0.0);
     s.random = fract(s.random + noise_temporal_offset * GOLDEN_RATIO);
+
+    // if (position.w >= 0.5) {
+    //     debug_random_texture(s, coords);
+    //     return;
+    // }
 
     s.radiance = 255.0 * surface.emissive.a * surface.emissive.rgb;
     s.visible_position = vec4<f32>(position.xyz, depth);
@@ -622,10 +656,22 @@ fn direct_lit(
     s.sample_position = info.position;
     s.sample_normal = info.normal;
 
+    // if (position.w >= 0.5) {
+    //   // s.random = info.position;
+    //   s.random = vec4(light.shadow_normal_bias, 0.0, 0.0, 1.0);
+    //   debug_random_texture(s, coords);
+    //   return;
+    // }
+
     // Second bounce: from sample position
     let b2_rand = random_float(workgroup_id.x + workgroup_id.y * num_workgroups.x + hash(frame.number));
     let b2_condition = max(0.0, sign(SECOND_BOUNCE_CHANCE - b2_rand));  // 1.0 if b2_rand < SECOND_BOUNCE_CHANCE
     s.random *= vec4<f32>(1.0, 1.0, b2_condition, b2_condition);
+
+    // if (position.w >= 0.5) {
+    //     debug_random_texture(s, coords);
+    //     return;
+    // }
 
     var p2 = 1.0;
     var head_radiance = vec3<f32>(0.0);

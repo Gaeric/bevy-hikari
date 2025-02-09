@@ -147,7 +147,7 @@ fn queue_overlay_bind_groups(
     prepass_target: Query<(Entity, &PrepassTarget)>,
 ) {
     // for (entity, prepass_target) in &prepass_target {
-    //     let texture = &prepass_target.depth;
+    //     let texture = &prepass_target.position;
     //     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
     //         label: None,
     //         layout: &pipeline.overlay_layout,
@@ -166,8 +166,8 @@ fn queue_overlay_bind_groups(
     // }
 
     for (entity, target) in &query {
-        let texture = &target.reservoir[0].random;
-        // let texture = &target.render;
+        // let texture = &target.reservoir[0].random;
+        let texture = &target.render;
 
         let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
             label: None,
