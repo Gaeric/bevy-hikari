@@ -1,6 +1,5 @@
 use super::{
-    GpuMesh, GpuMeshSlice, GpuNodeBuffer, GpuPrimitiveBuffer, GpuVertexBuffer,
-    MeshMaterialSystems,
+    GpuMesh, GpuMeshSlice, GpuNodeBuffer, GpuPrimitiveBuffer, GpuVertexBuffer, MeshMaterialSystems,
 };
 use bevy::{
     prelude::*,
@@ -80,7 +79,6 @@ pub struct ExtractedMeshes {
     removed: Vec<AssetId<Mesh>>,
 }
 
-
 /// [0.12] refer extract_materials
 /// Extract Mesh to ExtracedMeshes Resource
 fn extract_mesh_assets(
@@ -100,9 +98,7 @@ fn extract_mesh_assets(
                 changed_assets.remove(id);
                 removed.push(*id);
             }
-            AssetEvent::LoadedWithDependencies { .. } => {
-                
-            }
+            AssetEvent::LoadedWithDependencies { .. } | AssetEvent::Unused { .. } => {}
         }
     }
 

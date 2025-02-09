@@ -54,7 +54,7 @@ fn prepare_view_uniforms(
         let view = transform.compute_matrix();
         let inverse_view = view.inverse();
         let view_uniforms = PreviousViewUniformOffset {
-            offset: view_uniforms.uniforms.push(PreviousViewUniform {
+            offset: view_uniforms.uniforms.push(&PreviousViewUniform {
                 view_proj: projection * inverse_view,
                 inverse_view_proj: view * inverse_projection,
             }),

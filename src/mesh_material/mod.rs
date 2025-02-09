@@ -4,7 +4,10 @@ use self::{
     mesh::MeshPlugin,
 };
 use bevy::{
-    ecs::system::{lifetimeless::SRes, SystemParamItem},
+    ecs::{
+        query::ROQueryItem,
+        system::{lifetimeless::SRes, SystemParamItem},
+    },
     pbr::MeshPipeline,
     prelude::*,
     render::{
@@ -323,9 +326,9 @@ pub struct MeshMaterialBindGroupLayout(pub BindGroupLayout);
 impl FromWorld for MeshMaterialBindGroupLayout {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
-        let layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
+        let layout = render_device.create_bind_group_layout(
+            "mesh material bind group layout",
+            &[
                 // Vertices
                 BindGroupLayoutEntry {
                     binding: 0,
@@ -393,7 +396,7 @@ impl FromWorld for MeshMaterialBindGroupLayout {
                     count: None,
                 },
             ],
-        });
+        );
 
         Self(layout)
     }
@@ -413,9 +416,9 @@ fn prepare_texture_bind_group_layout(
     trace!("prepare texture bind group layout");
 
     let count = materials.textures.len();
-    let layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
+    let layout = render_device.create_bind_group_layout(
+        "texture bind group layout",
+        &[
             // Textures
             BindGroupLayoutEntry {
                 binding: 0,
@@ -435,7 +438,7 @@ fn prepare_texture_bind_group_layout(
                 count: NonZeroU32::new(count as u32),
             },
         ],
-    });
+    );
     commands.insert_resource(TextureBindGroupLayout { layout, count });
 }
 
@@ -538,13 +541,13 @@ fn queue_mesh_material_bind_group(
 pub struct SetMeshMaterialBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetMeshMaterialBindGroup<I> {
     type Param = SRes<MeshMaterialBindGroup>;
-    type ViewWorldQuery = ();
-    type ItemWorldQuery = ();
+    type ViewQuery = ();
+    type ItemQuery = ();
 
     fn render<'w>(
         _item: &P,
-        _view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
-        _entity: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
+        _view: ROQueryItem<'w, Self::ViewQuery>,
+        _entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {

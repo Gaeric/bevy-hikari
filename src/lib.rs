@@ -23,14 +23,20 @@ pub mod transform;
 pub mod view;
 
 pub mod graph {
-    pub const NAME: &str = "hikari";
+    use bevy::render::render_graph::{RenderLabel, RenderSubGraph};
+
+    #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderSubGraph)]
+    pub struct HikariGraph;
+
     pub mod input {
         pub const VIEW_ENTITY: &str = "view_entity";
     }
-    pub mod node {
-        pub const PREPASS: &str = "prepass";
-        pub const LIGHT_PASS: &str = "light_direct_pass";
-        pub const OVERLAY_PASS: &str = "overlay_pass";
+
+    #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+    pub enum HikariNode {
+        Prepass,
+        LightPass,
+        OverlayPass,
     }
 }
 
@@ -44,7 +50,7 @@ pub const DEFERRED_BINDINGS_HANDLE: Handle<Shader> = Handle::weak_from_u128(1446
 pub const PREPASS_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(4693612430004931427);
 pub const LIGHT_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(9657319286592943583);
 
-pub struct HikariPlugin; 
+pub struct HikariPlugin;
 
 // [0.8] refer PbrPlugin
 impl Plugin for HikariPlugin {
@@ -95,24 +101,27 @@ impl Plugin for HikariPlugin {
         };
 
         render_app
-            .add_render_sub_graph(graph::NAME)
-            .add_render_graph_node::<ViewNodeRunner<PrepassNode>>(graph::NAME, graph::node::PREPASS)
+            .add_render_sub_graph(graph::HikariGraph)
+            .add_render_graph_node::<ViewNodeRunner<PrepassNode>>(
+                graph::HikariGraph,
+                graph::HikariNode::Prepass,
+            )
             .add_render_graph_node::<ViewNodeRunner<LightPassNode>>(
-                graph::NAME,
-                graph::node::LIGHT_PASS,
+                graph::HikariGraph,
+                graph::HikariNode::LightPass,
             )
             .add_render_graph_node::<ViewNodeRunner<OverlayPassNode>>(
-                graph::NAME,
-                graph::node::OVERLAY_PASS,
+                graph::HikariGraph,
+                graph::HikariNode::OverlayPass,
             );
 
         render_app.add_render_graph_edges(
-            graph::NAME,
-            &[
-                graph::node::PREPASS,
-                graph::node::LIGHT_PASS,
-                graph::node::OVERLAY_PASS,
-            ],
+            graph::HikariGraph,
+            (
+                graph::HikariNode::Prepass,
+                graph::HikariNode::LightPass,
+                graph::HikariNode::OverlayPass,
+            ),
         );
     }
 }

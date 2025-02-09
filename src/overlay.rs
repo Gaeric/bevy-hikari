@@ -7,7 +7,10 @@ use crate::{
 use bevy::{
     asset::load_internal_asset,
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,
-    ecs::system::{lifetimeless::SRes, SystemParamItem},
+    ecs::{
+        query::ROQueryItem,
+        system::{lifetimeless::SRes, SystemParamItem},
+    },
     prelude::*,
     render::{
         camera::ExtractedCamera,
@@ -77,9 +80,9 @@ pub struct OverlayBindGroup {
 impl FromWorld for OverlayPipeline {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
-        let overlay_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
+        let overlay_layout = render_device.create_bind_group_layout(
+            "overlay pipeline layout",
+            &[
                 BindGroupLayoutEntry {
                     binding: 0,
                     visibility: ShaderStages::FRAGMENT,
@@ -97,7 +100,7 @@ impl FromWorld for OverlayPipeline {
                     count: None,
                 },
             ],
-        });
+        );
 
         Self { overlay_layout }
     }
@@ -292,14 +295,14 @@ type DrawOverlay = (SetItemPipeline, SetOverlayBindGroup<0>);
 pub struct SetOverlayBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOverlayBindGroup<I> {
     type Param = SRes<OverlayBindGroup>;
-    type ViewWorldQuery = ();
-    type ItemWorldQuery = ();
+    type ViewQuery = ();
+    type ItemQuery = ();
 
     #[inline]
     fn render<'w>(
         _item: &P,
-        _view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
-        _entity: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
+        _view: ROQueryItem<'w, Self::ViewQuery>,
+        _entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -360,10 +363,12 @@ impl ViewNode for OverlayPassNode {
                     ops: Operations {
                         // load: LoadOp::Clear(Color::NONE.into()),
                         load: LoadOp::Load,
-                        store: true,
+                        store: StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             if let Some(viewport) = camera.viewport.as_ref() {
                 render_pass.set_camera_viewport(viewport);

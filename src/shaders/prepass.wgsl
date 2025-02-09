@@ -4,7 +4,6 @@
 #import bevy_pbr::mesh_bindings::mesh
 
 #import bevy_render::view::View
-#import bevy_render::instance_index::get_instance_index
 
 struct PreviousView {
     view_proj: mat4x4<f32>,
@@ -56,7 +55,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     );
     out.previous_world_position = mesh_position_local_to_world(previous_mesh.model, vec4<f32>(vertex.position, 1.0));
     out.previous_world_position = out.world_position;
-    out.world_normal = mesh_normal_local_to_world(vertex.normal, get_instance_index(vertex.instance_index));
+    out.world_normal = mesh_normal_local_to_world(vertex.normal, vertex.instance_index);
     out.clip_position = view.view_proj * out.world_position;
     out.uv = vertex.uv;
 

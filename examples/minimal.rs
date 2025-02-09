@@ -41,7 +41,7 @@ fn setup(
     //     ..Default::default()
     // });
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane::default())),
+        mesh: meshes.add(Mesh::from(Plane3d::default())),
         material: materials.add(StandardMaterial {
             base_color: Color::GRAY,
             perceptual_roughness: 1.0,
@@ -57,7 +57,7 @@ fn setup(
 
     // Sphere
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::UVSphere {
+        mesh: meshes.add(Mesh::from(Sphere {
             radius: 0.5,
             ..Default::default()
         })),
@@ -126,7 +126,7 @@ fn setup(
 
     // Camera
     commands.spawn(Camera3dBundle {
-        camera_render_graph: CameraRenderGraph::new(bevy_hikari::graph::NAME),
+        camera_render_graph: CameraRenderGraph::new(bevy_hikari::graph::HikariGraph),
         transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..Default::default()
     });

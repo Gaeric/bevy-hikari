@@ -8,10 +8,10 @@ use crate::{
     PREPASS_SHADER_HANDLE,
 };
 use bevy::{
-    ecs::system::{
+    ecs::{query::ROQueryItem, system::{
         lifetimeless::{Read, SRes},
         SystemParamItem,
-    },
+    }},
     pbr::{
         DrawMesh, MeshLayouts, MeshPipeline, MeshPipelineKey, MeshTransforms, MeshUniform,
         RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
@@ -96,9 +96,9 @@ impl FromWorld for PrepassPipeline {
         let render_device = world.resource::<RenderDevice>();
         let mesh_pipeline = world.resource::<MeshPipeline>();
 
-        let view_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
+        let view_layout = render_device.create_bind_group_layout(
+            "prepass view layout",
+            &[
                 BindGroupLayoutEntry {
                     binding: 0,
                     visibility: ShaderStages::VERTEX_FRAGMENT,
@@ -120,15 +120,15 @@ impl FromWorld for PrepassPipeline {
                     count: None,
                 },
             ],
-        });
+        );
 
         // let mesh_layout = MeshLayouts::new(&render_device);
 
         // let mesh_layout = mesh_layout.model_only;
 
-        let mesh_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
+        let mesh_layout = render_device.create_bind_group_layout(
+            "prepass mesh layout",
+            &[
                 BindGroupLayoutEntry {
                     binding: 0,
                     visibility: ShaderStages::VERTEX_FRAGMENT,
@@ -161,7 +161,7 @@ impl FromWorld for PrepassPipeline {
                     count: None,
                 },
             ],
-        });
+        );
 
         Self {
             view_layout,
@@ -556,16 +556,16 @@ type DrawPrepass = (
 pub struct SetPrepassViewBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassViewBindGroup<I> {
     type Param = SRes<PrepassBindGroup>;
-    type ViewWorldQuery = (Read<ViewUniformOffset>, Read<PreviousViewUniformOffset>);
-    type ItemWorldQuery = ();
+    type ViewQuery = (Read<ViewUniformOffset>, Read<PreviousViewUniformOffset>);
+    type ItemQuery = ();
 
     fn render<'w>(
         _item: &P,
         (view_uniform, previous_view_uniform): bevy::ecs::query::ROQueryItem<
             'w,
-            Self::ViewWorldQuery,
+            Self::ViewQuery,
         >,
-        _entity: bevy::ecs::query::ROQueryItem<'w, Self::ItemWorldQuery>,
+        _entity: Option<()>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -585,24 +585,24 @@ pub struct SetPrepassMeshBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<I> {
     type Param = (SRes<PrepassBindGroup>, SRes<RenderMeshInstances>);
 
-    type ViewWorldQuery = ();
+    type ViewQuery = ();
 
-    type ItemWorldQuery = (
+    type ItemQuery = (
         Read<DynamicUniformIndex<PreviousMeshUniform>>,
         Read<DynamicInstanceIndex>,
     );
 
     fn render<'w>(
         item: &P,
-        _view: bevy::ecs::query::ROQueryItem<'w, Self::ViewWorldQuery>,
-        (previous_mesh_uniform, instance_index): bevy::ecs::query::ROQueryItem<
-            // (previous_mesh_uniform, instance_index): bevy::ecs::query::ROQueryItem<
-            'w,
-            Self::ItemWorldQuery,
-        >,
+        _view: bevy::ecs::query::ROQueryItem<'w, Self::ViewQuery>,
+        uniform: Option<ROQueryItem<'w, Self::ItemQuery>>,
         (bind_group, mesh_instances): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
+        let Some((previous_mesh_uniform, instance_index)) = uniform else {
+            return RenderCommandResult::Failure;
+        };
+
         let prepass_bind_group = bind_group.into_inner();
         let mesh_instances = mesh_instances.into_inner();
         let entity = &item.entity();
@@ -669,7 +669,7 @@ impl ViewNode for PrepassNode {
             let ops = Operations {
                 // load: LoadOp::Clear(Color::NONE.into()),
                 load: LoadOp::Load,
-                store: true,
+                store: StoreOp::Store,
             };
             let pass_descriptor = RenderPassDescriptor {
                 label: Some("main_prepass"),
@@ -697,11 +697,13 @@ impl ViewNode for PrepassNode {
                         ops,
                     }),
                 ],
+                timestamp_writes: None,
+                occlusion_query_set: None,
                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                     view: &target.depth.texture_view,
                     depth_ops: Some(Operations {
                         load: camera_3d.depth_load_op.clone().into(),
-                        store: true,
+                        store: StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),

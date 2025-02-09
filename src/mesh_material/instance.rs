@@ -305,7 +305,7 @@ fn prepare_instances(
                     instance: id as u32,
                     material: instance.material.value,
                 };
-                let index = render_assets.instance_indices.push(component);
+                let index = render_assets.instance_indices.push(&component);
                 debug!("instances: entity: {entity:?}, index: {index:?}");
                 (*entity, (DynamicInstanceIndex(index),))
             })

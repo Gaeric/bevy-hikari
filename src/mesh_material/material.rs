@@ -1,6 +1,5 @@
 use super::{
-    GpuStandardMaterial, GpuStandardMaterialBuffer, GpuStandardMaterialOffset,
-    MeshMaterialSystems,
+    GpuStandardMaterial, GpuStandardMaterialBuffer, GpuStandardMaterialOffset, MeshMaterialSystems,
 };
 use bevy::{
     prelude::*,
@@ -92,7 +91,7 @@ fn extract_material_assets(
                 changed_assets.remove(id);
                 removed.push(*id);
             }
-            AssetEvent::LoadedWithDependencies { .. } => {}
+            AssetEvent::LoadedWithDependencies { .. } | AssetEvent::Unused { .. } => {}
         }
     }
 
@@ -154,10 +153,10 @@ fn prepare_material_assets(
         .iter()
         .enumerate()
         .map(|(offset, (handle, material))| {
-            let base_color = material.base_color.into();
+            let base_color = material.base_color.as_linear_rgba_f32().into();
             let base_color_texture = texture_id(&material.base_color_texture);
 
-            let emissive = material.emissive.into();
+            let emissive = material.emissive.as_linear_rgba_f32().into();
             let emissive_texture = texture_id(&material.emissive_texture);
 
             let metallic_roughness_texture = texture_id(&material.metallic_roughness_texture);

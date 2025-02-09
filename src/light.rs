@@ -100,8 +100,9 @@ impl FromWorld for LightPipeline {
         // [0.8] refer mesh_view_bindings.wgsl
         // view_layout reuse mesh_view_bindings group and layout
         // so this bindding group match mesh_view_bindings.wgsl
-        let view_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            entries: &[
+        let view_layout = render_device.create_bind_group_layout(
+            "light pipeline view layout",
+            &[
                 // View
                 BindGroupLayoutEntry {
                     binding: 0,
@@ -202,13 +203,12 @@ impl FromWorld for LightPipeline {
                     count: None,
                 },
             ],
-            label: None,
-        });
+        );
 
         // deffered_layout use self group and layout
-        let deferred_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
+        let deferred_layout = render_device.create_bind_group_layout(
+            "light pipeline deferred layout",
+            &[
                 // Position Buffer
                 BindGroupLayoutEntry {
                     binding: 0,
@@ -272,11 +272,11 @@ impl FromWorld for LightPipeline {
                     count: None,
                 },
             ],
-        });
+        );
 
-        let frame_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
+        let frame_layout = render_device.create_bind_group_layout(
+            "light pipeline frame layout",
+            &[
                 // Frame Uniform
                 BindGroupLayoutEntry {
                     binding: 0,
@@ -306,11 +306,11 @@ impl FromWorld for LightPipeline {
                     count: None,
                 },
             ],
-        });
+        );
 
-        let render_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
+        let render_layout = render_device.create_bind_group_layout(
+            "light piepline render layout",
+            &[
                 // Render
                 BindGroupLayoutEntry {
                     binding: 0,
@@ -417,7 +417,7 @@ impl FromWorld for LightPipeline {
                     count: NonZeroU32::new(7),
                 },
             ],
-        });
+        );
 
         Self {
             view_layout,
