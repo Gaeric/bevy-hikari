@@ -159,7 +159,7 @@ fn prepare_overlay_bind_group(
     mut overlay_bind_group: ResMut<OverlayBindGroup>,
 ) {
     // for (_entity, prepass_target) in &prepass_target {
-    //     let texture = &prepass_target.instance_material;
+    //     let texture = &prepass_target.position;
     //     let bind_group = render_device.create_bind_group(
     //         None,
     //         &pipeline.overlay_layout,
@@ -181,7 +181,8 @@ fn prepare_overlay_bind_group(
         trace!("over bind group entity is {:?}", entity);
         // let texture_view = &target.render.texture_view;
         // let sampler = &target.render.sampler;
-        let texture = &target.reservoir[0].random;
+        // let texture = &target.reservoir[0].random;
+        let texture = &target.render;
 
         let bind_group = render_device.create_bind_group(
             None,
