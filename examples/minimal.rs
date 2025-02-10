@@ -41,7 +41,7 @@ fn setup(
     //     ..Default::default()
     // });
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(Plane3d::default())),
+        mesh: meshes.add(Mesh::from(shape::Plane::default())),
         material: materials.add(StandardMaterial {
             base_color: Color::GRAY,
             perceptual_roughness: 1.0,
@@ -57,10 +57,7 @@ fn setup(
 
     // Sphere
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(Sphere {
-            radius: 0.5,
-            ..Default::default()
-        })),
+        mesh: meshes.add(Mesh::from(Sphere::new(0.5).mesh().uv(36, 18))),
         material: materials.add(StandardMaterial {
             base_color_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
             emissive: Color::rgba(1.0, 1.0, 1.0, 0.1),
@@ -112,7 +109,7 @@ fn setup(
     // const HALF_SIZE: f32 = 5.0;
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 100000.0,
+            illuminance: 10000.0,
             shadows_enabled: true,
             ..Default::default()
         },
