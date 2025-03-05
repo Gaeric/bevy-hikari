@@ -548,7 +548,7 @@ fn shading(
 
     var v: VirtualLight;
     v.direction = ray.direction;
-    v.radiance = light.color.rgb;
+    v.radiance = light.color.rgb * view.exposure;
 
     if (info.position.w < 0.5) {
         // Directional and enviromental lighing
@@ -557,7 +557,7 @@ fn shading(
         } else {
             let diffuse_ambient = lighting::EnvBRDFApprox(diffuse_color, lighting::F_AB(1.0, NdotV));
             let specular_ambient = lighting::EnvBRDFApprox(F0, lighting::F_AB(surface.roughness, NdotV));
-            out_radiance = surface.occlusion * (diffuse_ambient + specular_ambient) * lights.ambient_color.rgb;
+            out_radiance = surface.occlusion * (diffuse_ambient + specular_ambient) * lights.ambient_color.rgb * view.exposure;
         }
     } else {
         // Emissive lighting
