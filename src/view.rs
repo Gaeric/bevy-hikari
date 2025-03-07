@@ -12,7 +12,7 @@ use bevy::{
 pub struct ViewPlugin;
 impl Plugin for ViewPlugin {
     fn build(&self, app: &mut App) {
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<PreviousViewUniforms>()
                 .add_systems(Render, prepare_view_uniforms.in_set(RenderSet::Prepare));
@@ -49,7 +49,7 @@ fn prepare_view_uniforms(
 ) {
     view_uniforms.uniforms.clear();
     for (entity, camera, transform) in &views {
-        let projection = camera.projection;
+        let projection = camera.clip_from_view;
         let inverse_projection = projection.inverse();
         let view = transform.compute_matrix();
         let inverse_view = view.inverse();

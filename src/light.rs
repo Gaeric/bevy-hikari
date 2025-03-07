@@ -5,8 +5,8 @@ use crate::{
 };
 use bevy::{
     pbr::{
-        GlobalLightMeta, GpuLights, GpuPointLights, LightMeta, MeshPipeline, ShadowSamplers,
-        ViewClusterBindings, ViewLightsUniformOffset, ViewShadowBindings,
+        GlobalClusterableObjectMeta, GpuClusterableObjects, GpuLights, LightMeta, MeshPipeline,
+        ShadowSamplers, ViewClusterBindings, ViewLightsUniformOffset, ViewShadowBindings,
     },
     prelude::*,
     render::{
@@ -41,7 +41,7 @@ impl Plugin for LightPlugin {
         app.add_plugins(ExtractResourcePlugin::<NoiseTexture>::default())
             .add_systems(Startup, noise_load);
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<FrameCounter>()
                 .init_resource::<SpecializedComputePipelines<LightPipeline>>()
@@ -168,7 +168,9 @@ impl FromWorld for LightPipeline {
                     ty: BindingType::Buffer {
                         ty: buffer_binding_type,
                         has_dynamic_offset: false,
-                        min_binding_size: Some(GpuPointLights::min_size(buffer_binding_type)),
+                        min_binding_size: Some(GpuClusterableObjects::min_size(
+                            buffer_binding_type,
+                        )),
                     },
                     count: None,
                 },
@@ -180,7 +182,7 @@ impl FromWorld for LightPipeline {
                         ty: buffer_binding_type,
                         has_dynamic_offset: false,
                         min_binding_size: Some(
-                            ViewClusterBindings::min_size_cluster_light_index_lists(
+                            ViewClusterBindings::min_size_clusterable_object_index_lists(
                                 buffer_binding_type,
                             ),
                         ),
@@ -492,7 +494,7 @@ fn prepare_light_pass_targets(
                 height: size.y,
                 depth_or_array_layers: 1,
             };
-            let size = size.as_vec2();
+
             let texture_usage = TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING;
 
             let mut create_texture = |texture_format, filter_mode| -> GpuImage {
@@ -640,15 +642,15 @@ pub fn queue_view_bind_groups(
     pipeline: Res<LightPipeline>,
     shadow_samplers: Res<ShadowSamplers>,
     light_meta: Res<LightMeta>,
-    global_light_meta: Res<GlobalLightMeta>,
+    global_light_meta: Res<GlobalClusterableObjectMeta>,
     view_uniforms: Res<ViewUniforms>,
     views: Query<(Entity, &ViewShadowBindings, &ViewClusterBindings)>,
 ) {
     // [0.8] refer queue_shadow_view_bind_group
-    if let (Some(view_binding), Some(light_binding), Some(point_light_binding)) = (
+    if let (Some(view_binding), Some(light_binding), Some(clusterable_objects_binding)) = (
         view_uniforms.uniforms.binding(),
         light_meta.view_gpu_lights.binding(),
-        global_light_meta.gpu_point_lights.binding(),
+        global_light_meta.gpu_clusterable_objects.binding(),
     ) {
         for (entity, shadow_bindings, cluster_bindings) in &views {
             let entries = DynamicBindGroupEntries::new_with_indices((
@@ -658,8 +660,13 @@ pub fn queue_view_bind_groups(
                 (3, &shadow_samplers.point_light_sampler),
                 (4, &shadow_bindings.directional_light_depth_texture_view),
                 (5, &shadow_samplers.directional_light_sampler),
-                (6, point_light_binding.clone()),
-                (7, cluster_bindings.light_index_lists_binding().unwrap()),
+                (6, clusterable_objects_binding.clone()),
+                (
+                    7,
+                    cluster_bindings
+                        .clusterable_object_index_lists_binding()
+                        .unwrap(),
+                ),
                 (8, cluster_bindings.offsets_and_counts_binding().unwrap()),
             ));
 
@@ -687,15 +694,15 @@ fn debug_query(
     prepass_query: Query<(Entity, &PrepassTarget)>,
     cascade_query: Query<(Entity, &PrepassTarget, &LightPassTarget)>,
 ) {
-    for (entity, demo_data) in &prepass_query {
+    for (entity, _demo_data) in &prepass_query {
         info!("entity with prepass target data is {:?}", entity)
     }
 
-    for (entity, demo_data) in &light_pass_query {
+    for (entity, _demo_data) in &light_pass_query {
         info!("entity with light pass data is {:?}", entity)
     }
 
-    for (entity, pprepass, light_pass) in &cascade_query {
+    for (entity, _prepass, _light_pass) in &cascade_query {
         info!("entity with light pass and target is {entity:?}");
     }
 }
@@ -708,7 +715,7 @@ fn queue_light_bind_groups(
     counter: Res<FrameCounter>,
     frame_uniform: Res<FrameUniform>,
     noise_texture: Res<NoiseTexture>,
-    images: Res<RenderAssets<Image>>,
+    images: Res<RenderAssets<GpuImage>>,
     query: Query<(Entity, &PrepassTarget, &LightPassTarget)>,
 ) {
     let mut noise_texture_views = vec![];

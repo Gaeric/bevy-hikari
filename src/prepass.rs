@@ -8,37 +8,36 @@ use crate::{
     PREPASS_SHADER_HANDLE,
 };
 use bevy::{
-    ecs::{query::ROQueryItem, system::{
-        lifetimeless::{Read, SRes},
-        SystemParamItem,
-    }},
-    pbr::{
-        DrawMesh, MeshLayouts, MeshPipeline, MeshPipelineKey, MeshTransforms, MeshUniform,
-        RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
+    ecs::{
+        query::ROQueryItem,
+        system::{
+            lifetimeless::{Read, SRes},
+            SystemParamItem,
+        },
     },
+    math::FloatOrd,
+    pbr::{DrawMesh, MeshPipeline, MeshPipelineKey, MeshUniform, RenderMeshInstances},
     prelude::*,
     render::{
-        batching::batch_and_prepare_render_phase,
         camera::ExtractedCamera,
         extract_component::{ComponentUniforms, DynamicUniformIndex},
-        mesh::MeshVertexBufferLayout,
+        mesh::{GpuMesh, MeshVertexBufferLayoutRef},
         render_asset::RenderAssets,
         render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_phase::{
-            sort_phase_system, AddRenderCommand, CachedRenderPipelinePhaseItem, DrawFunctionId,
-            DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult, RenderPhase,
-            SetItemPipeline, TrackedRenderPass,
+            AddRenderCommand, CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions,
+            PhaseItem, PhaseItemExtraIndex, RenderCommand, RenderCommandResult, SetItemPipeline,
+            SortedPhaseItem, TrackedRenderPass, ViewSortedRenderPhases,
         },
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
         texture::{GpuImage, TextureCache},
         view::{
             ExtractedView, ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
-            VisibleEntities,
+            VisibleEntities, WithMesh,
         },
         Extract, Render, RenderApp, RenderSet,
     },
-    utils::{nonmax::NonMaxU32, FloatOrd},
 };
 
 pub const DEBUG_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
@@ -51,7 +50,7 @@ pub const VELOCITY_UV_FORMAT: TextureFormat = TextureFormat::Rgba16Snorm;
 pub struct PrepassPlugin;
 impl Plugin for PrepassPlugin {
     fn build(&self, app: &mut App) {
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 // [0.8] refer Opaque3d
                 .init_resource::<DrawFunctions<PrepassPhase>>()
@@ -63,16 +62,11 @@ impl Plugin for PrepassPlugin {
                 )
                 .add_systems(
                     Render,
-                    batch_and_prepare_render_phase::<PrepassPhase, MeshPipeline>
-                        .in_set(RenderSet::PrepareResources),
-                )
-                .add_systems(
-                    Render,
                     (
                         prepare_prepass_targets.in_set(RenderSet::PrepareAssets),
                         queue_prepass_meshes.in_set(RenderSet::Queue),
                         prepare_prepass_bind_group.in_set(RenderSet::PrepareBindGroups),
-                        sort_phase_system::<PrepassPhase>.in_set(RenderSet::PhaseSort),
+                        // sort_phase_system::<PrepassPhase>.in_set(RenderSet::PhaseSort),
                     ),
                 );
         }
@@ -177,14 +171,14 @@ impl SpecializedMeshPipeline for PrepassPipeline {
     fn specialize(
         &self,
         key: Self::Key,
-        layout: &MeshVertexBufferLayout,
+        layout: &MeshVertexBufferLayoutRef,
     ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
         let vertex_attributes = vec![
             Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
             Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
             Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
         ];
-        let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
+        let vertex_buffer_layout = layout.0.get_layout(&vertex_attributes)?;
         let bind_group_layout = vec![self.view_layout.clone(), self.mesh_layout.clone()];
 
         let mut vertex_shader_defs = Vec::new();
@@ -272,12 +266,12 @@ impl SpecializedMeshPipeline for PrepassPipeline {
 fn extract_prepass_camera_phases(
     mut commands: Commands,
     cameras_3d: Extract<Query<(Entity, &Camera), With<Camera3d>>>,
+    mut prepass_phase: ResMut<ViewSortedRenderPhases<PrepassPhase>>,
 ) {
     for (entity, camera) in cameras_3d.iter() {
         if camera.is_active {
-            commands
-                .get_or_spawn(entity)
-                .insert(RenderPhase::<PrepassPhase>::default());
+            commands.get_or_spawn(entity);
+            prepass_phase.insert_or_clear(entity);
         }
     }
 }
@@ -295,7 +289,7 @@ fn prepare_prepass_targets(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     mut texture_cache: ResMut<TextureCache>,
-    cameras: Query<(Entity, &ExtractedCamera), With<RenderPhase<PrepassPhase>>>,
+    cameras: Query<(Entity, &ExtractedCamera)>,
 ) {
     for (entity, camera) in &cameras {
         if let Some(size) = camera.physical_target_size {
@@ -304,7 +298,6 @@ fn prepare_prepass_targets(
                 height: size.y,
                 depth_or_array_layers: 1,
             };
-            let size = size.as_vec2();
             let texture_usage = TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT;
 
             let mut create_texture = |texture_format| -> GpuImage {
@@ -362,26 +355,28 @@ fn prepare_prepass_targets(
 // verify ok
 fn queue_prepass_meshes(
     draw_functions: Res<DrawFunctions<PrepassPhase>>,
-    render_meshes: Res<RenderAssets<Mesh>>,
+    render_meshes: Res<RenderAssets<GpuMesh>>,
     prepass_pipeline: Res<PrepassPipeline>,
     mut pipelines: ResMut<SpecializedMeshPipelines<PrepassPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
     // meshes: Query<(Entity, &Handle<Mesh>, &MeshUniform, &DynamicInstanceIndex)>,
     render_mesh_instances: Res<RenderMeshInstances>,
-    mut views: Query<(
-        &ExtractedView,
-        &VisibleEntities,
-        &mut RenderPhase<PrepassPhase>,
-    )>,
+    mut prepass_render_phase: ResMut<ViewSortedRenderPhases<PrepassPhase>>,
+    mut views: Query<(Entity, &ExtractedView, &VisibleEntities)>,
 ) {
     debug!("queue_prepass_meshes in Render Queue.");
     let draw_function = draw_functions.read().get_id::<DrawPrepass>().unwrap();
-    for (view, visible_entities, mut prepass_phase) in &mut views {
+    for (view_entity, view, visible_entities) in &mut views {
         let rangefinder = view.rangefinder3d();
 
         debug!("visible entities {visible_entities:?}");
-        for visible_entity in &visible_entities.entities {
-            let Some(mesh_instance) = render_mesh_instances.get(visible_entity) else {
+        for visible_entity in visible_entities.iter::<WithMesh>() {
+            let Some(prepass_phase) = prepass_render_phase.get_mut(&view_entity) else {
+                continue;
+            };
+
+            let Some(mesh_instance) = render_mesh_instances.render_mesh_queue_data(*visible_entity)
+            else {
                 debug!("visible entities {visible_entity:?} not exists in render_mesh_instances");
                 continue;
             };
@@ -393,10 +388,9 @@ fn queue_prepass_meshes(
 
             debug!("queue_prepass_meshes entity is {:?}", visible_entity);
 
-            let distance =
-                rangefinder.distance_translation(&mesh_instance.transforms.transform.translation);
+            let distance = rangefinder.distance_translation(&mesh_instance.translation);
 
-            let key = MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
+            let key = MeshPipelineKey::from_primitive_topology(mesh.primitive_topology());
             let pipeline = pipelines
                 .specialize(&mut pipeline_cache, &prepass_pipeline, key, &mesh.layout)
                 .unwrap();
@@ -409,7 +403,7 @@ fn queue_prepass_meshes(
                 pipeline,
                 draw_function,
                 batch_range: 0..1,
-                dynamic_offset: None,
+                extra_index: PhaseItemExtraIndex::NONE,
             });
         }
     }
@@ -493,17 +487,19 @@ pub struct PrepassPhase {
     pub pipeline: CachedRenderPipelineId,
     pub draw_function: DrawFunctionId,
     pub batch_range: Range<u32>,
-    pub dynamic_offset: Option<NonMaxU32>,
+    pub extra_index: PhaseItemExtraIndex,
 }
 
-impl PhaseItem for PrepassPhase {
+impl SortedPhaseItem for PrepassPhase {
     type SortKey = FloatOrd;
 
     #[inline]
     fn sort_key(&self) -> Self::SortKey {
         FloatOrd(self.distance)
     }
+}
 
+impl PhaseItem for PrepassPhase {
     #[inline]
     fn draw_function(&self) -> DrawFunctionId {
         self.draw_function
@@ -524,14 +520,24 @@ impl PhaseItem for PrepassPhase {
         &mut self.batch_range
     }
 
+    // #[inline]
+    // fn dynamic_offset(&self) -> Option<NonMaxU32> {
+    //     self.dynamic_offset
+    // }
+
+    // #[inline]
+    // fn dynamic_offset_mut(&mut self) -> &mut Option<NonMaxU32> {
+    //     &mut self.dynamic_offset
+    // }
+
     #[inline]
-    fn dynamic_offset(&self) -> Option<NonMaxU32> {
-        self.dynamic_offset
+    fn extra_index(&self) -> PhaseItemExtraIndex {
+        self.extra_index
     }
 
     #[inline]
-    fn dynamic_offset_mut(&mut self) -> &mut Option<NonMaxU32> {
-        &mut self.dynamic_offset
+    fn batch_range_and_extra_index_mut(&mut self) -> (&mut Range<u32>, &mut PhaseItemExtraIndex) {
+        (&mut self.batch_range, &mut self.extra_index)
     }
 }
 
@@ -561,10 +567,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassViewBindGroup<
 
     fn render<'w>(
         _item: &P,
-        (view_uniform, previous_view_uniform): bevy::ecs::query::ROQueryItem<
-            'w,
-            Self::ViewQuery,
-        >,
+        (view_uniform, previous_view_uniform): bevy::ecs::query::ROQueryItem<'w, Self::ViewQuery>,
         _entity: Option<()>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
@@ -607,14 +610,14 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetPrepassMeshBindGroup<
         let mesh_instances = mesh_instances.into_inner();
         let entity = &item.entity();
 
-        let Some(_) = mesh_instances.get(entity) else {
+        let Some(_) = mesh_instances.render_mesh_queue_data(*entity) else {
             return RenderCommandResult::Success;
         };
 
         let mut dynamic_offsets: [u32; 1] = Default::default();
 
         // how to get right dynamic offset
-        if let Some(dynamic_offset) = item.dynamic_offset() {
+        if let Some(dynamic_offset) = item.extra_index().as_dynamic_offset() {
             dynamic_offsets[0] = dynamic_offset.get();
             debug!("dynamic offset is {:?}", dynamic_offsets[0]);
         }
@@ -649,7 +652,6 @@ pub struct PrepassNode;
 impl ViewNode for PrepassNode {
     type ViewQuery = (
         &'static ExtractedCamera,
-        &'static RenderPhase<PrepassPhase>,
         &'static Camera3d,
         &'static PrepassTarget,
         &'static ViewTarget,
@@ -659,12 +661,23 @@ impl ViewNode for PrepassNode {
         &self,
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (camera, prepass_phase, camera_3d, target, view_target): bevy::ecs::query::QueryItem<
-            Self::ViewQuery,
-        >,
+        (camera, camera_3d, target, _view_target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         {
+            let view_entity = graph.view_entity();
+            debug!("prepass phase view_entity: {:?}", view_entity);
+
+            let Some(prepass_render_phases) =
+                world.get_resource::<ViewSortedRenderPhases<PrepassPhase>>()
+            else {
+                return Ok(());
+            };
+
+            let Some(prepass_phase) = prepass_render_phases.get(&view_entity) else {
+                return Ok(());
+            };
+
             // let _main_prepass_span = info_span!("main_prepass").entered();
             let ops = Operations {
                 // load: LoadOp::Clear(Color::NONE.into()),
@@ -718,9 +731,6 @@ impl ViewNode for PrepassNode {
             for item in prepass_phase.items.iter() {
                 debug!("prepass phase item is {:?}", item.entity());
             }
-
-            let view_entity = graph.view_entity();
-            debug!("prepass phase view_entity: {:?}", view_entity);
 
             prepass_phase.render(&mut render_pass, world, view_entity);
         }

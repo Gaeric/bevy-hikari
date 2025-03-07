@@ -18,7 +18,7 @@ use std::{
 pub struct MaterialPlugin;
 impl Plugin for MaterialPlugin {
     fn build(&self, app: &mut App) {
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<MaterialRenderAssets>()
                 .init_resource::<StandardMaterials>()
@@ -38,7 +38,7 @@ impl Plugin for MaterialPlugin {
 pub struct GenericMaterialPlugin(PhantomData<StandardMaterial>);
 impl Plugin for GenericMaterialPlugin {
     fn build(&self, app: &mut App) {
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .add_systems(
                     ExtractSchedule,
@@ -153,10 +153,10 @@ fn prepare_material_assets(
         .iter()
         .enumerate()
         .map(|(offset, (handle, material))| {
-            let base_color = material.base_color.as_linear_rgba_f32().into();
+            let base_color = LinearRgba::from(material.base_color).to_vec4();
             let base_color_texture = texture_id(&material.base_color_texture);
 
-            let emissive = material.emissive.as_linear_rgba_f32().into();
+            let emissive = LinearRgba::from(material.emissive).to_vec4();
             let emissive_texture = texture_id(&material.emissive_texture);
 
             let metallic_roughness_texture = texture_id(&material.metallic_roughness_texture);

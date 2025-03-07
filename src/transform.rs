@@ -12,7 +12,7 @@ impl Plugin for TransformPlugin {
             previous_transform_system.before(TransformSystem::TransformPropagate),
         );
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app.add_systems(
                 ExtractSchedule,
                 extract_previous_transform.in_set(RenderSet::ExtractCommands),

@@ -29,7 +29,7 @@ impl Plugin for InstancePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(UniformComponentPlugin::<PreviousMeshUniform>::default());
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<GpuInstances>()
                 .init_resource::<InstanceRenderAssets>()
@@ -59,7 +59,7 @@ impl Plugin for GenericInstancePlugin {
                 .after(VisibilitySystems::CalculateBounds),
         );
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .add_systems(
                     ExtractSchedule,

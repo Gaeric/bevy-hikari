@@ -11,21 +11,21 @@ use bevy::{
         query::ROQueryItem,
         system::{lifetimeless::SRes, SystemParamItem},
     },
+    math::FloatOrd,
     prelude::*,
     render::{
         camera::ExtractedCamera,
         render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_phase::{
             AddRenderCommand, CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions,
-            PhaseItem, RenderCommand, RenderCommandResult, RenderPhase, SetItemPipeline,
-            TrackedRenderPass,
+            PhaseItem, PhaseItemExtraIndex, RenderCommand, RenderCommandResult, SetItemPipeline,
+            SortedPhaseItem, TrackedRenderPass, ViewSortedRenderPhases,
         },
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
-        view::ViewTarget,
+        view::{ExtractedView, ViewTarget},
         Extract, Render, RenderApp, RenderSet,
     },
-    utils::{nonmax::NonMaxU32, FloatOrd},
 };
 
 pub const OVERLAY_SHADER_HANDLE: Handle<Shader> =
@@ -41,7 +41,7 @@ impl Plugin for OverlayPlugin {
             Shader::from_wgsl
         );
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<DrawFunctions<Overlay>>()
                 .init_resource::<SpecializedRenderPipelines<OverlayPipeline>>()
@@ -144,12 +144,12 @@ impl SpecializedRenderPipeline for OverlayPipeline {
 fn extract_overlay_camera_phases(
     mut commands: Commands,
     cameras_3d: Extract<Query<(Entity, &Camera), With<Camera3d>>>,
+    mut overlay_phase: ResMut<ViewSortedRenderPhases<Overlay>>,
 ) {
     for (entity, camera) in cameras_3d.iter() {
         if camera.is_active {
-            commands
-                .get_or_spawn(entity)
-                .insert(RenderPhase::<Overlay>::default());
+            commands.get_or_spawn(entity);
+            overlay_phase.insert_or_clear(entity);
         }
     }
 }
@@ -157,7 +157,7 @@ fn extract_overlay_camera_phases(
 fn prepare_overlay_bind_group(
     render_device: Res<RenderDevice>,
     pipeline: Res<OverlayPipeline>,
-    prepass_target: Query<(Entity, &PrepassTarget)>,
+    _prepass_target: Query<(Entity, &PrepassTarget)>,
     query: Query<(Entity, &LightPassTarget)>,
     mut overlay_bind_group: ResMut<OverlayBindGroup>,
 ) {
@@ -211,10 +211,15 @@ fn queue_overlay_mesh(
     overlay_pipeline: Res<OverlayPipeline>,
     mut pipelines: ResMut<SpecializedRenderPipelines<OverlayPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
-    mut views: Query<(Entity, &mut RenderPhase<Overlay>)>,
+    mut overlay_render_phase: ResMut<ViewSortedRenderPhases<Overlay>>,
+    mut views: Query<(Entity, &ExtractedView)>,
 ) {
     let draw_function = draw_functions.read().get_id::<DrawOverlay>().unwrap();
-    for (entity, mut overlay_phase) in &mut views {
+    for (view_entity, _view) in &mut views {
+        let Some(overlay_phase) = overlay_render_phase.get_mut(&view_entity) else {
+            continue;
+        };
+
         let pipeline_id = pipelines.specialize(
             &mut pipeline_cache,
             &overlay_pipeline,
@@ -223,11 +228,11 @@ fn queue_overlay_mesh(
 
         overlay_phase.add(Overlay {
             distance: 0.0,
-            entity,
+            entity: view_entity,
             pipeline: pipeline_id,
             draw_function,
             batch_range: 0..1,
-            dynamic_offset: None,
+            extra_index: PhaseItemExtraIndex::NONE,
         });
     }
 }
@@ -239,20 +244,13 @@ pub struct Overlay {
     pub pipeline: CachedRenderPipelineId,
     pub draw_function: DrawFunctionId,
     pub batch_range: Range<u32>,
-    pub dynamic_offset: Option<NonMaxU32>,
+    pub extra_index: PhaseItemExtraIndex,
 }
 
 impl PhaseItem for Overlay {
-    type SortKey = FloatOrd;
-
     #[inline]
     fn entity(&self) -> Entity {
         self.entity
-    }
-
-    #[inline]
-    fn sort_key(&self) -> Self::SortKey {
-        FloatOrd(self.distance)
     }
 
     #[inline]
@@ -270,14 +268,33 @@ impl PhaseItem for Overlay {
         &mut self.batch_range
     }
 
+    // #[inline]
+    // fn dynamic_offset(&self) -> Option<NonMaxU32> {
+    //     self.dynamic_offset
+    // }
+
+    // #[inline]
+    // fn dynamic_offset_mut(&mut self) -> &mut Option<NonMaxU32> {
+    //     &mut self.dynamic_offset
+    // }
+
     #[inline]
-    fn dynamic_offset(&self) -> Option<NonMaxU32> {
-        self.dynamic_offset
+    fn extra_index(&self) -> PhaseItemExtraIndex {
+        self.extra_index
     }
 
     #[inline]
-    fn dynamic_offset_mut(&mut self) -> &mut Option<NonMaxU32> {
-        &mut self.dynamic_offset
+    fn batch_range_and_extra_index_mut(&mut self) -> (&mut Range<u32>, &mut PhaseItemExtraIndex) {
+        (&mut self.batch_range, &mut self.extra_index)
+    }
+}
+
+impl SortedPhaseItem for Overlay {
+    type SortKey = FloatOrd;
+
+    #[inline]
+    fn sort_key(&self) -> Self::SortKey {
+        FloatOrd(self.distance)
     }
 }
 
@@ -322,7 +339,6 @@ pub struct OverlayPassNode;
 impl ViewNode for OverlayPassNode {
     type ViewQuery = (
         &'static ExtractedCamera,
-        &'static RenderPhase<Overlay>,
         &'static Camera3d,
         &'static ViewTarget,
     );
@@ -331,11 +347,17 @@ impl ViewNode for OverlayPassNode {
         &self,
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (camera, overlay_phase, _camera_3d, target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
+        (camera, _camera_3d, target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         trace!("overlay pass node run");
-
+        let view_entity = graph.view_entity();
+        let Some(overlay_phases) = world.get_resource::<ViewSortedRenderPhases<Overlay>>() else {
+            return Ok(());
+        };
+        let Some(overlay_phase) = overlay_phases.get(&view_entity) else {
+            return Ok(());
+        };
         // [0.8] refer MainPass3dNode::run() main_opaque_pass_3d section
         {
             // let _main_prepass_span = info_span!("main_prepass").entered();
@@ -377,7 +399,6 @@ impl ViewNode for OverlayPassNode {
                 trace!("overlay phase item is {:?}", item.entity());
             }
 
-            let view_entity = graph.view_entity();
             trace!("overlay phase view_entity: {:?}", view_entity);
 
             overlay_phase.render(&mut render_pass, world, view_entity);

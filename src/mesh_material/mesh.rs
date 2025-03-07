@@ -1,5 +1,5 @@
 use super::{
-    GpuMesh, GpuMeshSlice, GpuNodeBuffer, GpuPrimitiveBuffer, GpuVertexBuffer, MeshMaterialSystems,
+    GpuBvhMesh, GpuMeshSlice, GpuNodeBuffer, GpuPrimitiveBuffer, GpuVertexBuffer, MeshMaterialSystems,
 };
 use bevy::{
     prelude::*,
@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 pub struct MeshPlugin;
 impl Plugin for MeshPlugin {
     fn build(&self, app: &mut App) {
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<GpuMeshes>()
                 .init_resource::<MeshRenderAssets>()
@@ -71,7 +71,7 @@ pub enum MeshAssetState {
 
 /// Holds all GPU representatives of mesh assets.
 #[derive(Default, Deref, DerefMut, Resource)]
-pub struct GpuMeshes(HashMap<AssetId<Mesh>, (GpuMesh, GpuMeshSlice)>);
+pub struct GpuMeshes(HashMap<AssetId<Mesh>, (GpuBvhMesh, GpuMeshSlice)>);
 
 #[derive(Default, Resource)]
 pub struct ExtractedMeshes {
@@ -123,7 +123,7 @@ fn extract_mesh_assets(
 fn prepare_mesh_assets(
     mut extracted_assets: ResMut<ExtractedMeshes>,
     mut asset_state: ResMut<MeshAssetState>,
-    mut assets: Local<BTreeMap<AssetId<Mesh>, GpuMesh>>,
+    mut assets: Local<BTreeMap<AssetId<Mesh>, GpuBvhMesh>>,
     mut meshes: ResMut<GpuMeshes>,
     mut render_assets: ResMut<MeshRenderAssets>,
     render_device: Res<RenderDevice>,
@@ -138,7 +138,7 @@ fn prepare_mesh_assets(
         meshes.remove(&handle);
     }
     for (handle, mesh) in extracted_assets.extracted.drain(..) {
-        assets.insert(handle, GpuMesh::from_mesh(mesh).unwrap());
+        assets.insert(handle, GpuBvhMesh::from_mesh(mesh).unwrap());
     }
 
     render_assets.clear();

@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::camera::CameraRenderGraph};
+use bevy::{color::palettes::css::GRAY, prelude::*, render::camera::CameraRenderGraph};
 use bevy_hikari::prelude::*;
 use std::f32::consts::PI;
 
@@ -41,9 +41,9 @@ fn setup(
     //     ..Default::default()
     // });
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane::default())),
+        mesh: meshes.add(Mesh::from(Plane3d::default())),
         material: materials.add(StandardMaterial {
-            base_color: Color::GRAY,
+            base_color: GRAY.into(),
             perceptual_roughness: 1.0,
             ..Default::default()
         }),
@@ -60,7 +60,7 @@ fn setup(
         mesh: meshes.add(Mesh::from(Sphere::new(0.5).mesh().uv(36, 18))),
         material: materials.add(StandardMaterial {
             base_color_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
-            emissive: Color::rgba(1.0, 1.0, 1.0, 0.1),
+            emissive: LinearRgba::new(1.0, 1.0, 1.0, 0.1),
             emissive_texture: Some(asset_server.load("models/Earth/earth_daymap.jpg")),
             ..Default::default()
         }),

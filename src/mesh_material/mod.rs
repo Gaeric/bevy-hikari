@@ -11,12 +11,7 @@ use bevy::{
     pbr::MeshPipeline,
     prelude::*,
     render::{
-        mesh::VertexAttributeValues,
-        render_asset::RenderAssets,
-        render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
-        render_resource::*,
-        renderer::RenderDevice,
-        Render, RenderApp, RenderSet,
+        mesh::VertexAttributeValues, render_asset::RenderAssets, render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass}, render_resource::*, renderer::RenderDevice, texture::GpuImage, Render, RenderApp, RenderSet
     },
 };
 use bvh::{
@@ -48,7 +43,7 @@ impl Plugin for MeshMaterialPlugin {
             GenericInstancePlugin::default(),
         ));
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app.add_systems(
                 Render,
                 (
@@ -204,13 +199,13 @@ pub enum PrepareMeshError {
 }
 
 #[derive(Default, Clone)]
-pub struct GpuMesh {
+pub struct GpuBvhMesh {
     pub vertices: Vec<GpuVertex>,
     pub primitives: Vec<GpuPrimitive>,
     pub nodes: Vec<GpuNode>,
 }
 
-impl GpuMesh {
+impl GpuBvhMesh {
     pub fn from_mesh(mesh: Mesh) -> Result<Self, PrepareMeshError> {
         let positions = mesh
             .attribute(Mesh::ATTRIBUTE_POSITION)
@@ -456,7 +451,7 @@ fn queue_mesh_material_bind_group(
     meshes: Res<MeshRenderAssets>,
     materials: Res<MaterialRenderAssets>,
     instances: Res<InstanceRenderAssets>,
-    images: Res<RenderAssets<Image>>,
+    images: Res<RenderAssets<GpuImage>>,
     mesh_material_layout: Res<MeshMaterialBindGroupLayout>,
     texture_layout: Res<TextureBindGroupLayout>,
 ) {
