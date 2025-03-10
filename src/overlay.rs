@@ -46,6 +46,7 @@ impl Plugin for OverlayPlugin {
                 .init_resource::<DrawFunctions<Overlay>>()
                 .init_resource::<SpecializedRenderPipelines<OverlayPipeline>>()
                 .init_resource::<OverlayBindGroup>()
+                .init_resource::<ViewSortedRenderPhases<Overlay>>()
                 .add_render_command::<Overlay, DrawOverlay>()
                 .add_systems(
                     ExtractSchedule,

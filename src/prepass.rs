@@ -16,9 +16,14 @@ use bevy::{
         },
     },
     math::FloatOrd,
-    pbr::{DrawMesh, MeshPipeline, MeshPipelineKey, MeshUniform, RenderMeshInstances},
+    pbr::{
+        DrawMesh, MeshInputUniform, MeshPipeline, MeshPipelineKey, MeshUniform, RenderMeshInstances,
+    },
     prelude::*,
     render::{
+        batching::{
+            gpu_preprocessing::BatchedInstanceBuffers, no_gpu_preprocessing::BatchedInstanceBuffer,
+        },
         camera::ExtractedCamera,
         extract_component::{ComponentUniforms, DynamicUniformIndex},
         mesh::{GpuMesh, MeshVertexBufferLayoutRef},
@@ -55,6 +60,7 @@ impl Plugin for PrepassPlugin {
                 // [0.8] refer Opaque3d
                 .init_resource::<DrawFunctions<PrepassPhase>>()
                 .init_resource::<SpecializedMeshPipelines<PrepassPipeline>>()
+                .init_resource::<ViewSortedRenderPhases<PrepassPhase>>()
                 .add_render_command::<PrepassPhase, DrawPrepass>()
                 .add_systems(
                     ExtractSchedule,
@@ -422,7 +428,10 @@ fn prepare_prepass_bind_group(
     mut commands: Commands,
     prepass_pipeline: Res<PrepassPipeline>,
     render_device: Res<RenderDevice>,
-    mesh_uniforms: Res<GpuArrayBuffer<MeshUniform>>,
+    cpu_batched_instance_buffer: Option<Res<BatchedInstanceBuffer<MeshUniform>>>,
+    gpu_batched_instance_buffers: Option<
+        Res<BatchedInstanceBuffers<MeshUniform, MeshInputUniform>>,
+    >,
     previous_mesh_uniforms: Res<ComponentUniforms<PreviousMeshUniform>>,
     instance_render_assets: Res<InstanceRenderAssets>,
     view_uniforms: Res<ViewUniforms>,
@@ -430,16 +439,28 @@ fn prepare_prepass_bind_group(
 ) {
     trace!("queue_prepass_bind_group");
 
+    let model = if let Some(cpu_batched_instance_buffer) = cpu_batched_instance_buffer {
+        cpu_batched_instance_buffer
+            .into_inner()
+            .instance_data_binding()
+    } else if let Some(gpu_batched_instance_buffers) = gpu_batched_instance_buffers {
+        gpu_batched_instance_buffers
+            .into_inner()
+            .instance_data_binding()
+    } else {
+        return;
+    };
+
+    let Some(mesh_binding) = model else { return };
+
     if let (
         Some(view_binding),
         Some(previous_view_binding),
-        Some(mesh_binding),
         Some(previous_mesh_binding),
         Some(instance_indices_binding),
     ) = (
         view_uniforms.uniforms.binding(),
         previous_view_uniforms.uniforms.binding(),
-        mesh_uniforms.binding(),
         previous_mesh_uniforms.binding(),
         instance_render_assets.instance_indices.binding(),
     ) {

@@ -3,11 +3,13 @@
 
 #import bevy_hikari::mesh_material_bindings
 #import bevy_hikari::overlay
-#import bevy_pbr::utils::PI
+#import bevy_render::maths::PI
+
 
 #import bevy_pbr::mesh_view_bindings::lights
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::mesh_view_types::DirectionalLight
+#import bevy_pbr::pbr_functions::calculate_view
 
 #import bevy_hikari::mesh_material_types::Instance
 #import bevy_hikari::mesh_material_types::Slice
@@ -334,23 +336,6 @@ fn cosine_sample_hemisphere(rand: vec2<f32>) -> vec3<f32> {
     );
     direction.z = sqrt(1.0 - dot(direction.xy, direction.xy));
     return direction;
-}
-
-// NOTE: Correctly calculates the view vector depending on whether
-// the projection is orthographic or perspective.
-fn calculate_view(
-    world_position: vec4<f32>,
-    is_orthographic: bool,
-) -> vec3<f32> {
-    var V: vec3<f32>;
-    if (is_orthographic) {
-        // Orthographic view vector
-        V = normalize(vec3<f32>(view.view_proj[0].z, view.view_proj[1].z, view.view_proj[2].z));
-    } else {
-        // Only valid for a perpective projection
-        V = normalize(view.world_position.xyz - world_position.xyz);
-    }
-    return V;
 }
 
 fn retreive_surface(material_id: u32, uv: vec2<f32>) -> Surface {

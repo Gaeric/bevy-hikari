@@ -23,8 +23,8 @@ impl Plugin for ViewPlugin {
 // [0.8] refer ViewUniform
 #[derive(Clone, ShaderType)]
 pub struct PreviousViewUniform {
-    view_proj: Mat4,
-    inverse_view_proj: Mat4,
+    clip_from_world: Mat4,
+    world_from_clip: Mat4,
 }
 
 // [0.8] refer ViewUniforms
@@ -55,8 +55,8 @@ fn prepare_view_uniforms(
         let inverse_view = view.inverse();
         let view_uniforms = PreviousViewUniformOffset {
             offset: view_uniforms.uniforms.push(&PreviousViewUniform {
-                view_proj: projection * inverse_view,
-                inverse_view_proj: view * inverse_projection,
+                clip_from_world: projection * inverse_view,
+                world_from_clip: view * inverse_projection,
             }),
         };
 

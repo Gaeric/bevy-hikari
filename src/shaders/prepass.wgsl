@@ -1,4 +1,4 @@
-#import bevy_pbr::mesh_functions::{get_model_matrix, mesh_position_local_to_world, mesh_normal_local_to_world}
+#import bevy_pbr::mesh_functions::mesh_position_local_to_world
 #import bevy_pbr::mesh_types
 #import bevy_pbr::mesh_functions
 #import bevy_pbr::mesh_bindings::mesh
@@ -6,8 +6,8 @@
 #import bevy_render::view::View
 
 struct PreviousView {
-    view_proj: mat4x4<f32>,
-    inverse_view_proj: mat4x4<f32>,
+    clip_from_world: mat4x4<f32>,
+    world_from_clip: mat4x4<f32>,
 };
 
 struct PreviousMesh {
@@ -50,13 +50,13 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
     out.world_position = mesh_position_local_to_world(
-        get_model_matrix(vertex.instance_index),
+        mesh_functions::get_world_from_local(vertex.instance_index),
         vec4<f32>(vertex.position, 1.0),
     );
     out.previous_world_position = mesh_position_local_to_world(previous_mesh.model, vec4<f32>(vertex.position, 1.0));
     out.previous_world_position = out.world_position;
-    out.world_normal = mesh_normal_local_to_world(vertex.normal, vertex.instance_index);
-    out.clip_position = view.view_proj * out.world_position;
+    out.world_normal = mesh_functions::mesh_normal_local_to_world(vertex.normal, vertex.instance_index);
+    out.clip_position = view.clip_from_world * out.world_position;
     out.uv = vertex.uv;
 
     return out;
@@ -78,8 +78,8 @@ fn clip_to_uv(clip: vec4<f32>) -> vec2<f32> {
 
 @fragment
 fn fragment(in: VertexOutput) -> FragmentOutput {
-    let clip_position = view.view_proj * in.world_position;
-    let previous_clip_position = previous_view.view_proj * in.previous_world_position;
+    let clip_position = view.clip_from_world * in.world_position;
+    let previous_clip_position = previous_view.clip_from_world * in.previous_world_position;
     let velocity = clip_to_uv(clip_position) - clip_to_uv(previous_clip_position);
 
     var out: FragmentOutput;
