@@ -158,36 +158,13 @@ fn extract_overlay_camera_phases(
 fn prepare_overlay_bind_group(
     render_device: Res<RenderDevice>,
     pipeline: Res<OverlayPipeline>,
-    _prepass_target: Query<(Entity, &PrepassTarget)>,
+    prepass_target: Query<(Entity, &PrepassTarget)>,
     query: Query<(Entity, &LightPassTarget)>,
     mut overlay_bind_group: ResMut<OverlayBindGroup>,
 ) {
-    // for (_entity, prepass_target) in &prepass_target {
-    //     let texture = &prepass_target.position;
-    //     let bind_group = render_device.create_bind_group(
-    //         None,
-    //         &pipeline.overlay_layout,
-    //         &[
-    //             BindGroupEntry {
-    //                 binding: 0,
-    //                 resource: BindingResource::TextureView(&texture.texture_view),
-    //             },
-    //             BindGroupEntry {
-    //                 binding: 1,
-    //                 resource: BindingResource::Sampler(&texture.sampler),
-    //             },
-    //         ],
-    //     );
-    //     overlay_bind_group.bind_group = Some(bind_group);
-    // }
-
-    for (entity, target) in &query {
-        trace!("over bind group entity is {:?}", entity);
-        // let texture_view = &target.render.texture_view;
-        // let sampler = &target.render.sampler;
-        // let texture = &target.reservoir[0].random;
-        let texture = &target.render;
-
+    for (_entity, prepass_target) in &prepass_target {
+        // trace!("over bind group entity is {:?}", _entity);
+        let texture = &prepass_target.position;
         let bind_group = render_device.create_bind_group(
             None,
             &pipeline.overlay_layout,
@@ -204,6 +181,30 @@ fn prepare_overlay_bind_group(
         );
         overlay_bind_group.bind_group = Some(bind_group);
     }
+
+    // for (entity, target) in &query {
+    //     trace!("over bind group entity is {:?}", entity);
+    //     // let texture_view = &target.render.texture_view;
+    //     // let sampler = &target.render.sampler;
+    //     // let texture = &target.reservoir[0].random;
+    //     let texture = &target.render;
+
+    //     let bind_group = render_device.create_bind_group(
+    //         None,
+    //         &pipeline.overlay_layout,
+    //         &[
+    //             BindGroupEntry {
+    //                 binding: 0,
+    //                 resource: BindingResource::TextureView(&texture.texture_view),
+    //             },
+    //             BindGroupEntry {
+    //                 binding: 1,
+    //                 resource: BindingResource::Sampler(&texture.sampler),
+    //             },
+    //         ],
+    //     );
+    //     overlay_bind_group.bind_group = Some(bind_group);
+    // }
 }
 
 #[allow(clippy::too_many_arguments)]

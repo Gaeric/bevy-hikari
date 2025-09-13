@@ -47,10 +47,13 @@ use bevy::{
 
 pub const DEBUG_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
 
-pub const POSITION_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
-pub const NORMAL_FORMAT: TextureFormat = TextureFormat::Rgba8Snorm;
+// pub const POSITION_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
+pub const POSITION_FORMAT: TextureFormat = DEBUG_FORMAT;
+pub const NORMAL_FORMAT: TextureFormat = TextureFormat::Rgb10a2Unorm;
+// pub const NORMAL_FORMAT: TextureFormat = TextureFormat::Rgba8Snorm;
 pub const INSTANCE_MATERIAL_FORMAT: TextureFormat = TextureFormat::Rg16Uint;
-pub const VELOCITY_UV_FORMAT: TextureFormat = TextureFormat::Rgba16Snorm;
+// pub const VELOCITY_UV_FORMAT: TextureFormat = TextureFormat::Rgba16Snorm;
+pub const VELOCITY_UV_FORMAT: TextureFormat = TextureFormat::Rg16Float;
 
 pub struct PrepassPlugin;
 impl Plugin for PrepassPlugin {
@@ -72,7 +75,7 @@ impl Plugin for PrepassPlugin {
                         prepare_prepass_targets.in_set(RenderSet::PrepareAssets),
                         queue_prepass_meshes.in_set(RenderSet::Queue),
                         prepare_prepass_bind_group.in_set(RenderSet::PrepareBindGroups),
-                        // sort_phase_system::<PrepassPhase>.in_set(RenderSet::PhaseSort),
+                        // // sort_phase_system::<PrepassPhase>.in_set(RenderSet::PhaseSort),
                     ),
                 );
         }
@@ -179,13 +182,14 @@ impl SpecializedMeshPipeline for PrepassPipeline {
         key: Self::Key,
         layout: &MeshVertexBufferLayoutRef,
     ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
+        debug!("specialize prepass pipeline");
+
         let vertex_attributes = vec![
             Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
             Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
             Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
         ];
         let vertex_buffer_layout = layout.0.get_layout(&vertex_attributes)?;
-        let bind_group_layout = vec![self.view_layout.clone(), self.mesh_layout.clone()];
 
         let mut vertex_shader_defs = Vec::new();
 
@@ -201,8 +205,9 @@ impl SpecializedMeshPipeline for PrepassPipeline {
         // }
 
         Ok(RenderPipelineDescriptor {
-            label: None,
-            layout: bind_group_layout,
+            label: Some("prepass_pipeline".into()),
+            layout: vec![self.view_layout.clone(), self.mesh_layout.clone()],
+            push_constant_ranges: vec![],
             vertex: VertexState {
                 shader: PREPASS_SHADER_HANDLE,
                 shader_defs: vertex_shader_defs,
@@ -238,7 +243,6 @@ impl SpecializedMeshPipeline for PrepassPipeline {
                     }),
                 ],
             }),
-            push_constant_ranges: Vec::new(),
             primitive: PrimitiveState {
                 topology: key.primitive_topology(),
                 strip_index_format: None,
@@ -373,9 +377,8 @@ fn queue_prepass_meshes(
     debug!("queue_prepass_meshes in Render Queue.");
     let draw_function = draw_functions.read().get_id::<DrawPrepass>().unwrap();
     for (view_entity, view, visible_entities) in &mut views {
-        let rangefinder = view.rangefinder3d();
-
         debug!("visible entities {visible_entities:?}");
+        let rangefinder = view.rangefinder3d();
         for visible_entity in visible_entities.iter::<WithMesh>() {
             let Some(prepass_phase) = prepass_render_phase.get_mut(&view_entity) else {
                 continue;
@@ -437,7 +440,7 @@ fn prepare_prepass_bind_group(
     view_uniforms: Res<ViewUniforms>,
     previous_view_uniforms: Res<PreviousViewUniforms>,
 ) {
-    trace!("queue_prepass_bind_group");
+    info!("queue_prepass_bind_group");
 
     let model = if let Some(cpu_batched_instance_buffer) = cpu_batched_instance_buffer {
         cpu_batched_instance_buffer
@@ -448,10 +451,14 @@ fn prepare_prepass_bind_group(
             .into_inner()
             .instance_data_binding()
     } else {
+        info!("without cpu/gpu batched instance buffers");
         return;
     };
 
-    let Some(mesh_binding) = model else { return };
+    let Some(mesh_binding) = model else {
+        info!("mesh binding not exists");
+        return;
+    };
 
     if let (
         Some(view_binding),
@@ -496,9 +503,11 @@ fn prepare_prepass_bind_group(
                 },
             ],
         );
-        debug!("mesh bindgroup: {:?}", mesh);
+        info!("mesh bindgroup: {:?}", mesh);
 
         commands.insert_resource(PrepassBindGroup { view, mesh });
+    } else {
+        info!("not have so many bindings");
     }
 }
 
@@ -682,7 +691,7 @@ impl ViewNode for PrepassNode {
         &self,
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (camera, camera_3d, target, _view_target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
+        (camera, camera_3d, target, view_target): bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         {
@@ -709,8 +718,8 @@ impl ViewNode for PrepassNode {
                 label: Some("main_prepass"),
                 color_attachments: &[
                     Some(RenderPassColorAttachment {
-                        view: &target.position.texture_view,
-                        // view: &view_target.out_texture(),
+                        // view: &target.position.texture_view,
+                        view: &view_target.out_texture(),
                         resolve_target: None,
                         ops,
                     }),

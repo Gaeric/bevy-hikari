@@ -27,9 +27,9 @@ fn setup(
     // comment for clear scene
     // Ground
     // commands.spawn(PbrBundle {
-    //     mesh: meshes.add(Mesh::from(shape::Cube::default())),
+    //     mesh: meshes.add(Mesh::from(Cuboid::default())),
     //     material: materials.add(StandardMaterial {
-    //         base_color: Color::rgb(0.3, 0.5, 0.3),
+    //         base_color: Color::srgb(0.3, 0.5, 0.3),
     //         perceptual_roughness: 0.5,
     //         ..Default::default()
     //     }),
@@ -40,20 +40,20 @@ fn setup(
     //     },
     //     ..Default::default()
     // });
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(Plane3d::default())),
-        material: materials.add(StandardMaterial {
-            base_color: GRAY.into(),
-            perceptual_roughness: 1.0,
-            ..Default::default()
-        }),
-        transform: Transform {
-            translation: Vec3::new(0.0, -1.0, 0.0),
-            scale: Vec3::new(400.0, 1.0, 400.0),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
+    // commands.spawn(PbrBundle {
+    //     mesh: meshes.add(Mesh::from(Plane3d::default())),
+    //     material: materials.add(StandardMaterial {
+    //         base_color: GRAY.into(),
+    //         perceptual_roughness: 1.0,
+    //         ..Default::default()
+    //     }),
+    //     transform: Transform {
+    //         translation: Vec3::new(0.0, -1.0, 0.0),
+    //         scale: Vec3::new(400.0, 1.0, 400.0),
+    //         ..Default::default()
+    //     },
+    //     ..Default::default()
+    // });
 
     // Sphere
     commands.spawn(PbrBundle {
@@ -125,6 +125,7 @@ fn setup(
     commands.spawn(Camera3dBundle {
         camera_render_graph: CameraRenderGraph::new(bevy_hikari::graph::HikariGraph),
         transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        // transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::new(10.0, 10.0, 10.0), Vec3::Y),
         ..Default::default()
     });
 }

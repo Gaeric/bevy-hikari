@@ -1,17 +1,12 @@
 #define_import_path bevy_hikari::overlay
 
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+#import bevy_core_pipeline::tonemapping::tonemapping_luminance as luminance
 
 @group(0) @binding(0)
 var render_texture_2d: texture_2d<f32>;
 @group(0) @binding(1)
 var render_sampler: sampler;
-
-// luminance coefficients from Rec. 709.
-// https://en.wikipedia.org/wiki/Rec._709
-fn luminance(v: vec3<f32>) -> f32 {
-    return dot(v, vec3<f32>(0.2126, 0.7152, 0.0722));
-}
 
 fn change_luminance(c_in: vec3<f32>, l_out: f32) -> vec3<f32> {
     let l_in = luminance(c_in);

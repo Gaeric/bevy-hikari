@@ -4,7 +4,7 @@
 #import bevy_hikari::mesh_material_bindings
 #import bevy_hikari::overlay
 #import bevy_render::maths::PI
-
+#import bevy_core_pipeline::tonemapping::tonemapping_luminance as luminance
 
 #import bevy_pbr::mesh_view_bindings::lights
 #import bevy_pbr::mesh_view_bindings::view
@@ -19,7 +19,6 @@
 #import bevy_hikari::mesh_material_bindings::instance_buffer
 #import bevy_hikari::mesh_material_bindings::instance_node_buffer
 #import bevy_hikari::mesh_material_bindings::material_buffer
-#import bevy_hikari::overlay::luminance
 
 #import bevy_hikari::deferred_bindings as deferred
 
@@ -157,18 +156,18 @@ struct Reservoir {
 };
 
 fn debug_random_texture(s: Sample, coords: vec2<i32>) {
-  var r: Reservoir;
-  r.s = s;
+    var r: Reservoir;
+    r.s = s;
   // r.s.random = vec4<f32>(s.random.xyz, 1.0);
-  r.count = 0.0;
-  r.w = 0.0;
-  r.w_sum = 0.0;
-  store_reservoir(coords, r);
-  textureStore(render_texture, coords, vec4<f32>(0.0));
+    r.count = 0.0;
+    r.w = 0.0;
+    r.w_sum = 0.0;
+    store_reservoir(coords, r);
+    textureStore(render_texture, coords, vec4<f32>(0.0));
 }
 
 fn old_light_shadow_normal_bias() -> f32 {
-  return sqrt(2.0) * 0.6;
+    return sqrt(2.0) * 0.6;
 }
 
 fn instance_position_world_to_local(instance: Instance, world_position: vec3<f32>) -> vec3<f32> {
@@ -197,7 +196,7 @@ fn intersects_aabb(ray: Ray, aabb: Aabb) -> f32 {
     t_max = min(t_max, max(t1.z, t2.z));
 
     var t: f32 = F32_MAX;
-    if (t_max >= t_min && t_max >= 0.0) {
+    if t_max >= t_min && t_max >= 0.0 {
         t = t_min;
     }
     return t;
@@ -216,14 +215,14 @@ fn intersects_triangle(ray: Ray, tri: array<vec3<f32>, 3>) -> Intersection {
 
     let u_vec = cross(ray.direction, ac);
     let det = dot(ab, u_vec);
-    if (abs(det) < F32_EPSILON) {
+    if abs(det) < F32_EPSILON {
         return result;
     }
 
     let inv_det = 1.0 / det;
     let ao = ray.origin - tri[0];
     let u = dot(ao, u_vec) * inv_det;
-    if (u < 0.0 || u > 1.0) {
+    if u < 0.0 || u > 1.0 {
         result.uv = vec2<f32>(u, 0.0);
         return result;
     }
@@ -231,12 +230,12 @@ fn intersects_triangle(ray: Ray, tri: array<vec3<f32>, 3>) -> Intersection {
     let v_vec = cross(ao, ab);
     let v = dot(ray.direction, v_vec) * inv_det;
     result.uv = vec2<f32>(u, v);
-    if (v < 0.0 || u + v > 1.0) {
+    if v < 0.0 || u + v > 1.0 {
         return result;
     }
 
     let distance = dot(ac, v_vec) * inv_det;
-    if (distance > F32_EPSILON) {
+    if distance > F32_EPSILON {
         result.distance = distance;
     }
 
@@ -250,16 +249,16 @@ fn traverse_bottom(ray: Ray, slice: Slice, hit: ptr<function, Hit>) -> bool {
         let node_index = slice.node_offset + index;
         let node = asset_node_buffer.data[node_index];
         var aabb: Aabb;
-        if (node.entry_index == U32_MAX) {
+        if node.entry_index == U32_MAX {
             let primitive_index = slice.primitive + node.primitive_index;
             let vertices = primitive_buffer.data[primitive_index].vertices;
 
             aabb.min = min(vertices[0], min(vertices[1], vertices[2]));
             aabb.max = max(vertices[0], max(vertices[1], vertices[2]));
 
-            if (intersects_aabb(ray, aabb) < (*hit).intersection.distance) {
+            if intersects_aabb(ray, aabb) < (*hit).intersection.distance {
                 let intersection = intersects_triangle(ray, vertices);
-                if (intersection.distance < (*hit).intersection.distance) {
+                if intersection.distance < (*hit).intersection.distance {
                     (*hit).intersection = intersection;
                     (*hit).primitive_index = primitive_index;
                     intersected = true;
@@ -271,7 +270,7 @@ fn traverse_bottom(ray: Ray, slice: Slice, hit: ptr<function, Hit>) -> bool {
             aabb.min = node.min;
             aabb.max = node.max;
 
-            if (intersects_aabb(ray, aabb) < (*hit).intersection.distance) {
+            if intersects_aabb(ray, aabb) < (*hit).intersection.distance {
                 index = node.entry_index;
             } else {
                 index = node.exit_index;
@@ -293,19 +292,19 @@ fn traverse_top(ray: Ray) -> Hit {
         let node = instance_node_buffer.data[index];
         var aabb: Aabb;
 
-        if (node.entry_index == U32_MAX) {
+        if node.entry_index == U32_MAX {
             let instance_index = node.primitive_index;
             let instance = instance_buffer.data[instance_index];
             aabb.min = instance.min;
             aabb.max = instance.max;
 
-            if (intersects_aabb(ray, aabb) < hit.intersection.distance) {
+            if intersects_aabb(ray, aabb) < hit.intersection.distance {
                 var r: Ray;
                 r.origin = instance_position_world_to_local(instance, ray.origin);
                 r.direction = instance_direction_world_to_local(instance, ray.direction);
                 r.inv_direction = 1.0 / r.direction;
 
-                if (traverse_bottom(r, instance.slice, &hit)) {
+                if traverse_bottom(r, instance.slice, &hit) {
                     hit.instance_index = instance_index;
                 }
             }
@@ -315,7 +314,7 @@ fn traverse_top(ray: Ray) -> Hit {
             aabb.min = node.min;
             aabb.max = node.max;
 
-            if (intersects_aabb(ray, aabb) < hit.intersection.distance) {
+            if intersects_aabb(ray, aabb) < hit.intersection.distance {
                 index = node.entry_index;
             } else {
                 index = node.exit_index;
@@ -344,25 +343,25 @@ fn retreive_surface(material_id: u32, uv: vec2<f32>) -> Surface {
 
     surface.base_color = material.base_color;
     var id = material.base_color_texture;
-    if (id != U32_MAX) {
+    if id != U32_MAX {
         surface.base_color *= textureSampleLevel(textures[id], samplers[id], uv, 0.0);
     }
 
     surface.emissive = material.emissive;
     id = material.emissive_texture;
-    if (id != U32_MAX) {
+    if id != U32_MAX {
         surface.emissive *= textureSampleLevel(textures[id], samplers[id], uv, 0.0);
     }
 
     surface.metallic = material.metallic;
     id = material.metallic_roughness_texture;
-    if (id != U32_MAX) {
+    if id != U32_MAX {
         surface.metallic *= textureSampleLevel(textures[id], samplers[id], uv, 0.0).r;
     }
 
     surface.occlusion = 1.0;
     id = material.occlusion_texture;
-    if (id != U32_MAX) {
+    if id != U32_MAX {
         surface.occlusion = textureSampleLevel(textures[id], samplers[id], uv, 0.0).r;
     }
 
@@ -374,7 +373,7 @@ fn retreive_surface(material_id: u32, uv: vec2<f32>) -> Surface {
 
 fn hit_info(ray: Ray, hit: Hit) -> HitInfo {
     var info: HitInfo;
-    if (hit.instance_index != U32_MAX) {
+    if hit.instance_index != U32_MAX {
         let instance = instance_buffer.data[hit.instance_index];
         let indices = primitive_buffer.data[hit.primitive_index].indices;
 
@@ -459,7 +458,7 @@ fn update_reservoir(
     s: Sample,
     w_new: f32,
 ) {
-    if (distance(s.visible_position.w, (*r).s.visible_position.w) > 0.001 || dot(s.visible_normal, (*r).s.visible_normal) < 0.866) {
+    if distance(s.visible_position.w, (*r).s.visible_position.w) > 0.001 || dot(s.visible_normal, (*r).s.visible_normal) < 0.866 {
         (*r).count = 0.0;
         (*r).w = 0.0;
         (*r).w_sum = 0.0;
@@ -471,7 +470,7 @@ fn update_reservoir(
     (*r).count = (*r).count + 1.0;
 
     let rand = random_float(invocation_id.x << 16u ^ invocation_id.y ^ hash(frame.number));
-    if (rand < w_new / (*r).w_sum) {
+    if rand < w_new / (*r).w_sum {
         (*r).s = s;
     }
 }
@@ -480,6 +479,42 @@ fn merge_reservoir(invocation_id: vec3<u32>, r: ptr<function, Reservoir>, other:
     let count = (*r).count;
     update_reservoir(invocation_id, r, other.s, p * other.w * other.count);
     (*r).count = count + other.count;
+}
+
+// ray tracing not need light layers
+fn Fd_Burley(roughness: f32, NoV: f32, NoL: f32, LoH: f32) -> f32 {
+    let f90 = 0.5 + 2.0 * roughness * LoH * LoH;
+    let lightScatter = lighting::F_Schlick(1.0, f90, NoL);
+    let viewScatter = lighting::F_Schlick(1.0, f90, NoV);
+    return lightScatter * viewScatter * (1.0 / PI);
+}
+
+// Specular BRDF
+// https://google.github.io/filament/Filament.html#materialsystem/specularbrdf
+
+// Cook-Torrance approximation of the microfacet model integration using Fresnel law F to model f_m
+// f_r(v,l) = { D(h,α) G(v,l,α) F(v,h,f0) } / { 4 (n⋅v) (n⋅l) }
+fn specular(
+    f0: vec3<f32>,
+    roughness: f32,
+    h: vec3<f32>,
+    NoV: f32,
+    NoL: f32,
+    NoH: f32,
+    LoH: f32,
+    specularIntensity: f32,
+    f_ab: vec2<f32>
+) -> vec3<f32> {
+    let D = lighting::D_GGX(roughness, NoH, h);
+    let V = lighting::V_SmithGGXCorrelated(roughness, NoV, NoL);
+    let F = lighting::fresnel(f0, LoH);
+
+    var Fr = (specularIntensity * D * V) * F;
+
+    // Multiscattering approximation: https://google.github.io/filament/Filament.html#listing_energycompensationimpl
+    Fr *= 1.0 + f0 * (1.0 / f_ab.x - 1.0);
+
+    return Fr;
 }
 
 fn virtual_light(
@@ -499,10 +534,10 @@ fn virtual_light(
     let NoH = saturate(dot(normal, half_vector));
     let LoH = saturate(dot(incident_light, half_vector));
 
-    let diffuse = diffuse_color * lighting::Fd_Burley(roughness, NdotV, NoL, LoH);
+    let diffuse = diffuse_color * Fd_Burley(roughness, NdotV, NoL, LoH);
     let specular_intensity = 1.0;
     let f_ab = lighting::F_AB(roughness, NdotV);
-    let specular_light = lighting::specular(F0, roughness, half_vector, NdotV, NoL, NoH, LoH, specular_intensity, f_ab);
+    let specular_light = specular(F0, roughness, half_vector, NdotV, NoL, NoH, LoH, specular_intensity, f_ab);
 
     return (specular_light + diffuse) * light.radiance * NoL;
 }
@@ -535,9 +570,9 @@ fn shading(
     v.direction = ray.direction;
     v.radiance = light.color.rgb * view.exposure;
 
-    if (info.position.w < 0.5) {
+    if info.position.w < 0.5 {
         // Directional and enviromental lighing
-        if (dot(light.direction_to_light, ray.direction) > cos(SOLAR_ANGLE)) {
+        if dot(light.direction_to_light, ray.direction) > cos(SOLAR_ANGLE) {
             out_radiance = virtual_light(v, surface.roughness, NdotV, N, V, R, F0, diffuse_color);
         } else {
             let diffuse_ambient = lighting::EnvBRDFApprox(diffuse_color, lighting::F_AB(1.0, NdotV));
@@ -568,7 +603,7 @@ fn direct_lit(
     var s = empty_sample();
 
     let position = textureSampleLevel(deferred::position_texture, deferred::position_sampler, uv, 0.0);
-    if (position.w < 0.5) {
+    if position.w < 0.5 {
         var r: Reservoir;
         r.s = s;
         r.count = 0.0;
@@ -586,9 +621,9 @@ fn direct_lit(
     //   return;
     // }
 
-    let ndc = view.view_proj * position;
+    let ndc = view.clip_from_world * position;
     let depth = ndc.z / ndc.w;
-    let view_direction = calculate_view(position, view.projection[3].w == 1.0);
+    let view_direction = calculate_view(position, view.clip_from_view[3].w == 1.0);
 
     let normal = textureSampleLevel(deferred::normal_texture, deferred::normal_sampler, uv, 0.0).xyz;
     let instance_material = textureLoad(deferred::instance_material_texture, coords, 0);
@@ -667,7 +702,7 @@ fn direct_lit(
 
     var p2 = 1.0;
     var head_radiance = vec3<f32>(0.0);
-    if (any(s.random.zw > vec2<f32>(0.0)) && hit.instance_index != U32_MAX) {
+    if any(s.random.zw > vec2<f32>(0.0)) && hit.instance_index != U32_MAX {
         // bounce_ray.origin = info.position.xyz + info.normal * light.shadow_normal_bias;
         bounce_ray.origin = info.position.xyz + info.normal * old_light_shadow_normal_bias();
         bounce_ray.direction = normal_basis(info.normal) * cosine_sample_hemisphere(s.random.zw);
@@ -700,7 +735,7 @@ fn direct_lit(
     // ReSTIR: Temporal
     let previous_uv = uv - velocity_uv.xy;
     var r = sample_reservoir(previous_uv);
-    if (any(abs(previous_uv - 0.5) > vec2<f32>(0.5))) {
+    if any(abs(previous_uv - 0.5) > vec2<f32>(0.5)) {
         r.s.visible_normal = vec3<f32>(0.0);
     }
 
@@ -711,7 +746,7 @@ fn direct_lit(
     textureStore(render_texture, coords, vec4<f32>(r.s.radiance * r.w, 1.0));
 
     // Sample validation: is the temporally reused path xv-xs still valid?
-    if (frame.number % VALIDATION_INTERVAL == 0u && distance(s.sample_position, r.s.sample_position) > 0.1) {
+    if frame.number % VALIDATION_INTERVAL == 0u && distance(s.sample_position, r.s.sample_position) > 0.1 {
         // ray.origin = position.xyz + light.shadow_normal_bias * normal;
         ray.origin = position.xyz + old_light_shadow_normal_bias() * normal;
         ray.direction = normal_basis(normal) * cosine_sample_hemisphere(r.s.random.xy);
@@ -720,7 +755,7 @@ fn direct_lit(
         info = hit_info(ray, hit);
         var valid_radiance = 255.0 * surface.emissive.a * surface.emissive.rgb;
 
-        if (any(r.s.random.zw > vec2<f32>(0.0)) && hit.instance_index != U32_MAX) {
+        if any(r.s.random.zw > vec2<f32>(0.0)) && hit.instance_index != U32_MAX {
             // bounce_ray.origin = info.position.xyz + info.normal * light.shadow_normal_bias;
             bounce_ray.origin = info.position.xyz + info.normal * old_light_shadow_normal_bias();
             bounce_ray.direction = normal_basis(info.normal) * cosine_sample_hemisphere(r.s.random.zw);
@@ -749,7 +784,7 @@ fn direct_lit(
             head_radiance
         );
 
-        if (abs(luminance(r.s.radiance) - luminance(valid_radiance)) / luminance(r.s.radiance) > 0.1) {
+        if abs(luminance(r.s.radiance) - luminance(valid_radiance)) / luminance(r.s.radiance) > 0.1 {
             r.count = 0.0;
             r.w = 0.0;
             r.w_sum = 0.0;

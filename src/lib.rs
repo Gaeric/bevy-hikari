@@ -91,8 +91,8 @@ impl Plugin for HikariPlugin {
             ViewPlugin,
             MeshMaterialPlugin,
             PrepassPlugin,
-            LightPlugin,
-            OverlayPlugin,
+            // LightPlugin,
+            // OverlayPlugin,
         ));
 
         let render_app = match app.get_sub_app_mut(RenderApp) {
@@ -106,21 +106,22 @@ impl Plugin for HikariPlugin {
                 graph::HikariGraph,
                 graph::HikariNode::Prepass,
             )
-            .add_render_graph_node::<ViewNodeRunner<LightPassNode>>(
-                graph::HikariGraph,
-                graph::HikariNode::LightPass,
-            )
-            .add_render_graph_node::<ViewNodeRunner<OverlayPassNode>>(
-                graph::HikariGraph,
-                graph::HikariNode::OverlayPass,
-            );
+            // .add_render_graph_node::<ViewNodeRunner<LightPassNode>>(
+            //     graph::HikariGraph,
+            //     graph::HikariNode::LightPass,
+            // )
+            // .add_render_graph_node::<ViewNodeRunner<OverlayPassNode>>(
+            //     graph::HikariGraph,
+            //     graph::HikariNode::OverlayPass,
+            // )
+;
 
         render_app.add_render_graph_edges(
             graph::HikariGraph,
             (
                 graph::HikariNode::Prepass,
-                graph::HikariNode::LightPass,
-                graph::HikariNode::OverlayPass,
+                // graph::HikariNode::LightPass,
+                // graph::HikariNode::OverlayPass,
             ),
         );
     }
